@@ -1,0 +1,21 @@
+# sfsro-fuse
+
+Todo:
+- Install macfuse (https://osxfuse.github.io)
+- Go through each method contained in \
+		/usr/local/include/fuse/fuse.h::struct fuse_operations: \
+	Determine what each function is supposed to do in a regular filesystem. \
+	Understand the sfsro equivalent. \
+	Implement.
+
+
+open:
+opendir:
+readdir:
+releasedir:
+
+init:
+destroy:
+access??:
+
+read_buf:
