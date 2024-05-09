@@ -9,29 +9,35 @@
 
 // For now, deplay the same program to all the pies.
 
-// #include "get-pies.h"
+#include "get-pies.h"
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
 
-#define panic(str...) fprintf(stderr, str)
+#define panic(str...) fprintf(stderr, str); exit(0)
 
 static inline char const *get_arg(int *i, int argc, char const **argv) {
-	if (*i >= argc) { panic("Not enough arguments!\n"); return NULL; }
+	if (*i >= argc) { panic("Not enough arguments!\n"); }
 	return argv[(*i)++];
 }
 
 int main(int argc, char const **argv) {
-	// char **dev_names = get_connected_pies();	
-	char const *pi_prog = 0;
+	int num_pies;
+	struct dirent **devs = get_connected_pies(&num_pies);	
+	if(num_pies == -1) { panic("Could not retrieve pies!\n"); }
+
 
 	unsigned baud_rate = B115200;
 	unsigned boot_addr = 0x8000; // Boot address for the pi0s.
 
 	int i = 1;
-	char const *pi_prog = get_arg(&i, argv);
+	char const *pi_prog = get_arg(&i, argc, argv);
 
-
-fail:
-	free(dev_names);
+	for(unsigned i = 0; i < num_pies; ++i) {
+		printf("%s\n", devs[i]->d_name);
+	}
+	
+	// free(dev_names);
 	return 0;
 }

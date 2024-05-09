@@ -19,3 +19,12 @@ destroy:
 access??:
 
 read_buf:
+
+
+For any FUSE filesystem, include this in implementation file:
+
+#define FUSE_USE_VERSION 26
+
+#include "fuse.h"
+
+// ..Rest of file
