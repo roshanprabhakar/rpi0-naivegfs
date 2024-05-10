@@ -8,7 +8,7 @@ dep := $(obj:.o=.d)
 
 
 all: init $(obj)
-	$(cc) -o build/rpi-dos $(obj)
+	$(cc) -o build/rpi-gfs $(obj)
 
 $(obj): ./build/%.o: ./src/%.c ./build/%.d
 	$(cc) $(ops) -c $< -o $@

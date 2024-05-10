@@ -1,16 +1,12 @@
-#include "get-pies.h"
+#include "libmac.h"
 
 #include <sys/stat.h>
+#include <stdlib.h>
 #include <string.h>
 
-#define ARRAY_LEN(arr) (sizeof(arr)/sizeof(arr[0]))
-
-
 static const char *tty_prefixes[] = {
-	"cu.SLAB_USB",
 	"cu.usbserial",
 };
-
 
 int filter(const struct dirent *d) {
 	for(unsigned i = 0; i < ARRAY_LEN(tty_prefixes); ++i) {
@@ -22,9 +18,13 @@ int filter(const struct dirent *d) {
 	return 0;
 }
 
-
 struct dirent **get_connected_pies(int *num_pies) {
 	struct dirent **namelist;
 	*num_pies = scandir("/dev", &namelist, filter, alphasort);
 	return namelist;
+}
+
+void free_pie_list(struct dirent **l, int n) {
+	for(int i = 0; i < n; ++i) free(l[i]);
+	free(l);
 }
