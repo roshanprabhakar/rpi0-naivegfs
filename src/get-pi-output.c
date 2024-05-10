@@ -4,10 +4,10 @@
 #define PI_READ_TIMEOUT_SECS 5
 
 /* Performs a round robin search of the booted raspberry pies,
- * querying each to see if data is available to return the mac.
+ * querying each to see if data is available to return to the mac.
  * If there is the descriptor is open and there is data, perform 
  * uninterrupted read from the selected pi, only terminating 
- * after 100 ms after the buffer is drained. Once all descriptors
+ * after 100 ms after that buffer is drained. Once all descriptors
  * are closed, return control to pi-install
  *
  * unifiedfd: probably stdout_fd
