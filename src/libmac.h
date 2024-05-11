@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <dirent.h>
 
+#include "bootpi.h"
+
 /**
  * Collects all project-wide useful macros + functions that
  * occupy entire files (functions called from the client).

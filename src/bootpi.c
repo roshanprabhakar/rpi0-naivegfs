@@ -88,5 +88,7 @@ int boot(pi *p, void *program, int nbytes) {
 	}
 
 	printf("pi<%d> successfully booted!\n", p->fd);
+	p->open = 1;
+
 	return 0;
 }

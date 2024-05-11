@@ -27,17 +27,22 @@ static inline char const *get_arg(int *i, int argc, char const **argv) {
 }
 
 int main(int argc, char const **argv) {
+
+	// First, get the character devices connected. We just assume these
+	// are pies.
 	int num_pies;
 	struct dirent **devs = get_connected_pies(&num_pies);	
-	if(num_pies == -1) { panic("Could not retrieve pies!\n"); exit(0); }
+	if(num_pies == -1) { panic("Could not retrieve pies!\n"); return -1; }
 
+	// Initialize some constants...
 	unsigned baudrate = B115200;
 	unsigned boot_addr = 0x8000; // Boot address for the pi0s.
 	double timeout = 2*5; // In tenths of a second.
 
-	int i = 1;
-	char const *pi_prog_path = get_arg(&i, argc, argv);
+	int arg_iter = 1;
+	char const *pi_prog_path = get_arg(&arg_iter, argc, argv);
 
+	// Read the program to be deployed.
 	int num_prog_bytes;
 	void *prog = get_bytes(pi_prog_path,&num_prog_bytes);
 	if(prog == NULL) {
@@ -46,7 +51,7 @@ int main(int argc, char const **argv) {
 		exit(0);
 	}
 
-	// Boot each of the pies.
+	// Begin booting each of the pies.
 	pi *pies = malloc(sizeof(pi) * num_pies);
 
 	unsigned init_i = 0;
@@ -64,6 +69,7 @@ int main(int argc, char const **argv) {
 			pies[init_i].fd = open(dev_wholename, O_RDWR | O_NOCTTY | O_SYNC);
 		}
 
+		// Some more config needed to talk to the pi via char file.
 		pies[init_i].fd = 
 			set_tty_to_8n1(pies[init_i].fd, baudrate, timeout);
 
@@ -72,12 +78,19 @@ int main(int argc, char const **argv) {
 			goto end;
 		}
 
-		if (boot(&pies[init_i], prog, num_prog_bytes) != 0) {
+		// Now that the pi is allocated and the fd is properly set up, 
+		// jump to code that uses the established connection to perform
+		// the boot protocol.
+		if(boot(&pies[init_i], prog, num_prog_bytes) != 0) {
 			panic("boot on pi<%d> failed, aborting all.\n", pies[init_i].fd);
 			goto end;
 		}
 
 	}
+
+	// Now that all pies have been booted up successfully, start
+	// reading their outputs.
+	get_pi_output(pies, num_pies, STDOUT_FILENO);
 
 end:
 	for(int i = 0; i < init_i; ++i) {
