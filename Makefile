@@ -16,6 +16,8 @@ pisrc := $(shell find . -wholename "./pi-src/*.c")
 piobj := $(patsubst ./pi-src/%.c, ./build/pi/%.o, $(pisrc))
 pidep := $(piobj:.o=.d)
 
+pisupportingobjs := $(shell find . -wholename "./240-pi-binaries/*.o")
+
 ######################### MAC SIDE #########################
 
 # Build mac-side and pi-side binaries, after making build/...
@@ -39,7 +41,7 @@ $(macdep): %.d: ;
 
 # Build pi-side binaries.
 pibin: $(piobj)
-	$(pcc) $(pops) -Wl,-e,start -T pi-src/linker.ld -o build/pi/pi-side.elf $(pisrc)
+	$(pcc) $(pops) -Wl,-e,start -T pi-src/linker.ld -o build/pi/pi-side.elf $(pisrc) $(pisupportingobjs)
 	$(poc) build/pi/pi-side.elf -O binary build/pi/pi-side.bin
 
 # Build individual ojects for the pi.

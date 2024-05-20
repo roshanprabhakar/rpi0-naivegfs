@@ -4,7 +4,7 @@ start_addr = 0x8000;
 
 SECTIONS {
 	. = start_addr;
-	.text : { *(.text*) }
+	.text : { KEEP(*(.text.boot*)) *(.text*) }
 	.rodata : { *(.rodata*) }
 	PROVIDE (data_section = .);
 	.data : { *(.data*) }
