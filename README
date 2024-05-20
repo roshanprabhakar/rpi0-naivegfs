@@ -1,5 +1,10 @@
 # fuse-rpi-dfs
 
+To run what's there, connect one or more pies and run
+```sh
+./build/mac/deploy ./build/pi/pi-side.bin
+```
+
 Todo:
 - Install macfuse (https://osxfuse.github.io)
 - Go through each method contained in \

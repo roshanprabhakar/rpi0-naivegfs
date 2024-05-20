@@ -5,6 +5,9 @@
 #define GPIO_TX 14
 #define GPIO_RX 15
 
+// Return status
+#define GPIO_INVALID_REQUEST -1
+
 // Different functions we can set GPIO pins to
 typedef enum {
     GPIO_FUNC_INPUT   = 0,
@@ -64,7 +67,7 @@ void gpio_set_output(unsigned pin);
 void gpio_write(unsigned pin, unsigned val);
 
 // read <pin>: 1 = high, 0 = low.
-int gpio_read(unsigned pin);
+unsigned gpio_read(unsigned pin);
 
 // turn <pin> on.
 void gpio_set_on(unsigned pin);

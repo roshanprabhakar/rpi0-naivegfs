@@ -64,7 +64,7 @@ void gpio_write(unsigned int pin, unsigned int value) {
     }
 }
 
-unsigned int gpio_read(unsigned int pin) {
+unsigned gpio_read(unsigned int pin) {
     if (pin < 0 || pin > 53){
         return GPIO_INVALID_REQUEST;
     }
@@ -90,7 +90,8 @@ void gpio_set_off(unsigned pin) {
 }
 
 
-
+// Uncomment when implemented.
+#if 0
 // In process of implementing
 void gpio_set_pullup(unsigned pin) {
     gpio->pull[0] = 0b10;
@@ -127,5 +128,6 @@ void gpio_set_pulldown(unsigned pin) {
 
 
 // TO DO: Implement interrupts on GPIO
+#endif
 
 

@@ -6,7 +6,7 @@
 _start:
 	
 	@ force the mode to be SUPER
-	mor r0, #SUPER_MODE
+	mov r0, #SUPER_MODE
 	orr r0,r0,#(1<<7) @ disable interrupts
 	msr cpsr, r0
 	prefetch_flush(r1)
@@ -16,7 +16,11 @@ _start:
 	@ bl notmain
 	
 	bl _cstart 						@ call our code to do initialization.
-	bl rpi_reboot					@ if they return just reboot.
+	b _halt								@ if they return, just hang.
+
+_halt:
+	nop
+	b _halt
 
 @ Keep put32/get32 here so that they are in the same location in every binary.
 @ If you want to override them easily, can re-defined the name in rpi-asm.h

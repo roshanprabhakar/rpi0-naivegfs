@@ -1,6 +1,9 @@
 @ Needed by some 240 binaries, not 100% sure what's going on
 @ here.
 
+.globl dev_barrier
+.globl dmb
+
 dev_barrier:
 	b dsb
 

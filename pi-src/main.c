@@ -26,17 +26,20 @@ void *memset(void *ptr, uint32_t b, uint32_t len) {
 // Called to setup the C runtime and initialize commonly used 
 // subsystems.
 void _cstart() {
-	void notmain();
+	void entry(void);
 
 	// Zero out the bss.
 	memset(&bss_start,0,(uintptr_t)&bss_end - (uintptr_t)&bss_start);
 
 	// Initialize hardware uart.
 	uart_init();
+	
+	// Jump to main app-level code.
+	entry();
 }
 
-int start(void) {
-	
 
-	return 0;
+void entry() {
+	putk("Hello from the pi!\nDONE!!!\n");
+	return;
 }

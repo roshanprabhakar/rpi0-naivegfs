@@ -10,19 +10,20 @@ pi_c_ops 	:= -g -D__RPI__ -Og -Wall -nostdlib -nostartfiles \
 					-std=gnu99 -ggdb -Wno-pointer-sign -Werror \
 					-Wno-unused-function -Wno-unused-variable \
 					-ffunction-sections -fdata-sections -MMD \
-					-mno-unaligned-access -mtp=soft -Wl,--no-warn-rwx-segments
+					-mno-unaligned-access -mtp=soft 
 
-pi_as 		:= arm-none-eabi-gcc
+pi_as 		:= arm-non-eabi-gcc
 pi_as_ops := -g -D__RPI__ -0g -Wall -mcpu=cortex-a53
 
-pi_link_ops := -ffreestanding -nostdlib -lgcc
+pi_link_ops := -ffreestanding -nostdlib -lgcc \
+						 -Wl,--no-warn-rwx-segments
 
 pi_oc			:= arm-none-eabi-objcopy
 
 # Get source files, associated object files and dependency files.
 mac_src		:= $(shell find . -wholename "./mac-src/*.c")
 mac_obj		:= $(patsubst ./mac-src/%.c, ./build/mac/%.o, $(mac_src))
-mac_dep		:= $(mac_obj:.o=.d)
+mac_dep		:= $(macobj:.o=.d)
 
 pi_c 			:= $(shell find . -wholename "./pi-src/*.c")
 pi_c_obj	:= $(patsubst ./pi-src/%.c, ./build/pi/%.o, $(pi_c))
@@ -32,42 +33,50 @@ pi_S 			:= $(shell find . -wholename "./pi-src/*.S")
 pi_S_obj	:= $(patsubst ./pi-src/%.S, ./build/pi/%.o, $(pi_S))
 pi_S_dep	:= $(pi_S_obj:.o=.d)
 
-pi_support_obj := $(shell find . -wholename "./ext-bin/*.o")
+pi_support_objs := $(shell find . -wholename "./ext-bin/*.o")
 
 # Build mac-side and pi-side binaries, after making build/...
 # First rule in the Makefile, automatically run.
-all: init pibin macbin
+all: init macbin pibin
 
 ######################### MAC SIDE #########################
 
+# Build mac-side binaries.
 macbin: $(mac_obj)
 	$(mac_cc) $(mac_link_ops) -o build/mac/deploy $(mac_obj)
 
+# Build individual object files for the mac.
 $(mac_obj): ./build/mac/%.o: ./mac-src/%.c ./build/mac/%.d
 	$(mac_cc) $(mac_c_ops) -c $< -o $@
 
+# Needed for -MMD...haven't looked into why
+-include $(macdep)
+
 $(mac_dep): %.d: ;
--include $(mac_dep)
 
 ########################## PI SIDE #########################
 
+# Build pi-side binaries.
 pibin: $(pi_c_obj) $(pi_S_obj)
 	$(pi_cc) $(pi_link_ops) -Wl,-e,_start \
 		-T pi-src/linker.ld -o build/pi/pi-side.elf \
-		$(pi_c_obj) $(pi_S_obj) $(pi_support_obj)
-
+		$(pi_c_obj) $(pi_S_obj) $(pi_support_objs)
 	$(pi_oc) build/pi/pi-side.elf -O binary build/pi/pi-side.bin
 
-$(pi_c_obj): ./build/pi/%.o: ./pi-src/%.c ./build/pi/%.d
+# Build individual ojects for the pi.
+$(pi_c_obj): ./build/%.o: ./pi-src/%.c ./build/pi/%.d
 	$(pi_cc) $(pi_c_ops) -c $< -o $@
 
+$(pi_S_obj): ./build/%.o: ./pi-src/%.S ./build/pi/%.d
+	$(pi_as) $(pi_as_ops) -c $< -o $@
+
+
 -include $(pi_c_dep)
+
 $(pi_c_dep): %.d: ;
 
-$(pi_S_obj): ./build/pi/%.o: ./pi-src/%.S ./build/pi/%.d
-	$(pi_as) $(pi_S_ops) -c $< -o $@
-
 -include $(pi_S_dep)
+
 $(pi_S_dep): %.d: ;
 
 ############################################################
@@ -79,3 +88,4 @@ init:
 clean:
 	rm -rf build
 	rm -f `find . -wholename "./src/*.d"`
+
