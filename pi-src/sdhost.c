@@ -57,11 +57,13 @@ void emmc_issue_command(uint32_t command, uint32_t arg) {
 	// Issue command to command reg.
 	put32(EMMC_CMDTM, command);
 
-	// Wait for the command to complete.
+	// Wait for the command to complete, or an error to happen.
 	uint32_t ints;
-	while((ints = get32(EMMC_INTERRUPT
+	while(((ints = get32(EMMC_INTERRUPT)) 
+		 & (SD_INT_COMMAND_COMPLETE | SD_INT_ERROR)) == 0)
+		;
+	
 
-	command &= 0xff;
 }
 
 
