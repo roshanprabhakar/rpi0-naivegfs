@@ -7,8 +7,8 @@
 
 /* From start.S */
 
-void put32(int *addr, int v);
-int get32(int *addr);
+void put32(int addr, int v);
+int get32(int addr);
 
 void BRANCHTO(void (*fn)(void));
 

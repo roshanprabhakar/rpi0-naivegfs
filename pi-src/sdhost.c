@@ -6,17 +6,17 @@
 // Handle any pending emmc interrupts.
 // return value indicates which interrupts were handled.
 static uint32_t handle_interrupts() {
-	uint32_t ints = get_32(EMMC_INTERRUPT);
+	uint32_t ints = get32(EMMC_INTERRUPT);
 
-	uint32_t reset_mask = ints & SD_INT_COMMAND_COMPELTE
-		| ints & SD_INT_TRANSFER_COMPLETE
-		| ints & SD_INT_BLOCK_GAP_EVENT
-		| ints & SD_INT_DMA
-		| ints & SD_INT_BUFFER_WRITE_READY
-		| ints & SD_INT_BUFFER_READ_READY
-		| ints & SD_INT_CARD_INSERTED
-		| ints & SD_INT_CARD_REMOVED
-		| ints & SD_INT_INTERRUPT
+	uint32_t reset_mask = (ints & SD_INT_COMMAND_COMPLETE)
+		| (ints & SD_INT_TRANSFER_COMPLETE)
+		| (ints & SD_INT_BLOCK_GAP_EVENT)
+		| (ints & SD_INT_DMA)
+		| (ints & SD_INT_BUFFER_WRITE_READY)
+		| (ints & SD_INT_BUFFER_READ_READY)
+		| (ints & SD_INT_CARD_INSERTED)
+		| (ints & SD_INT_CARD_REMOVED)
+		| (ints & SD_INT_INTERRUPT)
 		| ((ints & 0x8000) ? 0xffff0000 : 0)
 		;
 
@@ -51,8 +51,9 @@ static int wait_for_ints_or_errs(uint32_t int_mask, int err_mask) {
 #define response_type(c) (c & SD_CMD_RSPNS_TYPE_MASK)
 #define cmd_type(c) (c & SD_CMD_TYPE_MASK)
 #define busy SD_CMD_RSPNS_TYPE_48_BUSY
+#define abort SD_CMD_TYPE_ABORT
 
-#define CARD_TO_HOST 1
+#define CARD_TO_HOST (1<<4)
 
 static int check_err(int ret, int ints) {
 	return (ret & (0xffff0000 | ints)) != ints;
@@ -63,7 +64,7 @@ static int emmc_issue_command_int(uint32_t command,
 																	 uint32_t *addr) {
 	uint32_t response_reg_0;
 	uint32_t response_reg_1;
-	uint32_t resopnse_reg_2;
+	uint32_t response_reg_2;
 	uint32_t response_reg_3;
 
 	int ints, errs, mask, ret;
@@ -125,7 +126,7 @@ static int emmc_issue_command_int(uint32_t command,
 
 		int int_to_watch;
 		int is_write;
-		if(command & SD_CMD_DATA_DIR == CARD_TO_HOST) {
+		if((command & SD_CMD_DATA_DIR) == CARD_TO_HOST) {
 			is_write = 0;
 			int_to_watch = 1 << 5; // read
 		} else {
@@ -188,6 +189,10 @@ static int emmc_issue_command_int(uint32_t command,
 		}
 	}
 
+	(void)response_reg_0;
+	(void)response_reg_1;
+	(void)response_reg_2;
+	(void)response_reg_3;
 	return 0;
 }
 
@@ -196,7 +201,7 @@ static int emmc_issue_command(uint32_t command,
 												uint32_t *addr) {
 
 	uint32_t handled_ints = handle_interrupts();
-	if(handled_ints & SD_CARD_REMOVAL) {
+	if(handled_ints & SD_INT_CARD_REMOVED) {
 		printk("SD card removed right before issue command, \
 				aborting.\n");
 		return -1;

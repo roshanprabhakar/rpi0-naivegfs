@@ -72,7 +72,7 @@
 // 					- 10 = 48 bits response
 #define SD_CMD_RSPNS_TYPE_48 (2<<16)
 // 					- 11 = 48 bits response using busy
-#define SD_CMD_RSPNS_TYPE_48_BUSY (2<<16)
+#define SD_CMD_RSPNS_TYPE_48_BUSY (3<<16)
 // 
 // [5] TM_MULTI_BLOCK - Type of data transfer
 // 					- 0 = single block
