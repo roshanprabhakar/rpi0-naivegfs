@@ -59,9 +59,11 @@ void emmc_issue_command(uint32_t command, uint32_t arg) {
 
 	// Wait for the command to complete, or an error to happen.
 	uint32_t ints;
-	while(((ints = get32(EMMC_INTERRUPT)) 
-		 & (SD_INT_COMMAND_COMPLETE | SD_INT_ERROR)) == 0)
+	int mask = SD_INT_COMMAND_COMPELTE | SD_INT_ERROR;
+	while((ints = get32(EMMC_INTERRUPT)) & mask == 0)
 		;
+
+	
 	
 
 }
