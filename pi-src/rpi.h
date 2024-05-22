@@ -38,7 +38,8 @@ int vprintk(const char *fmt, va_list ap);
 // print string to <buf>
 #include <stdarg.h>
 int snprintk(char *buf, unsigned buflen, const char *fmt, ...);
-int vsnprintk(char *buf, unsigned buflen, const char *fmt, va_list ap);
+int vsnprintk(char *buf, unsigned buflen, const char *fmt, 
+		va_list ap);
 
 /* Other */
 void rpi_wait(void);

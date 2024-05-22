@@ -55,7 +55,7 @@
 //
 // [21] CMD_ISDATA - 0 indicates no data transfer command,
 // 									 1 indicates is data transfer command.
-//
+#define SD_CMD_IS_DATA (1<<21)
 // [20] - Check that response has same index as command.
 // 					- 0 = disabled
 // 					- 1 = enabled
@@ -81,6 +81,7 @@
 // [4] TM_DAT_DIR - Direction of data transfer
 // 					- 0 = from host to card
 // 					- 1 = from card to host
+#define SD_CMD_DATA_DIR (1<<4)
 //
 // [3:2] TM_AUTO_CMD_EN - Select the command to be sent after 
 // completion of a data transfer:
@@ -159,22 +160,22 @@
 // [9:11] - Reserved, don't care
 // [12] - Clock retune request was made, don't care
 // [13] - Boot acknowledged has been recieved
-#define BOOT_ACK (1<<13)
+#define SD_INT_BOOT_ACK (1<<13)
 // [14] - Boot operation has been terminated
-#define BOOT_END (1<<14)
+#define SD_INT_BOOT_END (1<<14)
 // [15] - An error has occurred
 #define SD_INT_ERROR (1<<15)
 // [16:19] - Used for CRC or Command line, don't care
 // [20] - Timeout on data line
-#define DTO_ERR (1<<20)
+#define SD_INT_DATA_TIMEOUT_ERR (1<<20)
 // [21] - Error CRC, don't care
+#define SD_INT_CRC_ERR (1<<21)
 // [22] - End bit on data line is not 1 error
-#define DEND_ERR (1<<22)
+#define SD_INT_DEND_ERR (1<<22)
 // [23] - Reserved, don't care
 // [24] - Auto command error
-#define ACMD_ERR (1<<24)
+#define SD_INT_ACMD_ERR (1<<24)
 // [31:25] - Reserved, don't care
-
 #define EMMC_INTERRUPT (EMMC_BASE + 0x30)
 
 #define EMMC_IRPT_MASK (EMMC_BASE + 0x34)
