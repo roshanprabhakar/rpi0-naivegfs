@@ -138,31 +138,43 @@
 // This register should be polled to determine the status of the
 // SD card. The individual event flags can be disabled with 
 // IRPT_MASK. 
-// [0] - Command has finished.
+// [0] - Command has finished
 #define SD_INT_COMMAND_COMPLETE 1
-// [1] - Data transfer finished.
+// [1] - Data transfer finished
 #define SD_INT_TRANSFER_COMPLETE (1<<1)
-// [2] - Data transfer has stopped at block gap.
+// [2] - Data transfer has stopped at block gap
 #define SD_INT_BLOCK_GAP_EVENT (1<<2)
 // [3] - DMA
 #define SD_INT_DMA (1<<3)
-// [4] - Data can be written to the DATA register.
+// [4] - Data can be written to the DATA register
 #define SD_INT_BUFFER_WRITE_READY (1<<4)
-// [5] - Data can be read from the DATA register.
+// [5] - Data can be read from the DATA register
 #define SD_INT_BUFFER_READ_READY (1<<5)
 // [6] - SD card was inserted
 #define SD_INT_CARD_INSERTED (1<<6)
 // [7] - SD card was removed
 #define SD_INT_CARD_REMOVED (1<<7)
-// [8] - SD Card made interrupt request.
+// [8] - SD Card made interrupt request
 #define SD_INT_INTERRUPT (1<<8)
-
-//... TODO...
-
-// [15] - An error has occurred.
+// [9:11] - Reserved, don't care
+// [12] - Clock retune request was made, don't care
+// [13] - Boot acknowledged has been recieved
+#define BOOT_ACK (1<<13)
+// [14] - Boot operation has been terminated
+#define BOOT_END (1<<14)
+// [15] - An error has occurred
 #define SD_INT_ERROR (1<<15)
+// [16:19] - Used for CRC or Command line, don't care
+// [20] - Timeout on data line
+#define DTO_ERR (1<<20)
+// [21] - Error CRC, don't care
+// [22] - End bit on data line is not 1 error
+#define DEND_ERR (1<<22)
+// [23] - Reserved, don't care
+// [24] - Auto command error
+#define ACMD_ERR (1<<24)
+// [31:25] - Reserved, don't care
 
-// ... TODO ...
 #define EMMC_INTERRUPT (EMMC_BASE + 0x30)
 
 #define EMMC_IRPT_MASK (EMMC_BASE + 0x34)
