@@ -210,3 +210,57 @@ static int emmc_issue_command(uint32_t command,
 	return emmc_issue_command_int(command, arg, addr);
 }
 
+
+static int do_data_command (int is_write, uint8_t *buf, size_t buf_size, int32_t block_no) {
+    
+    /* NOTE: We might need to use byte addresses instead of block (?)
+     * PLSS table 4.20 - SDSC cards use byte addresses rather than block addresses
+
+	if (!m_card_supports_sdhc) {
+		block_no *= SD_BLOCK_SIZE;
+	}
+    */
+
+    size_t blocks_to_transfer = buf_size/SD_BLOCK_SIZE;
+
+    int command;
+	if (is_write) {
+		command = (blocks_to_transfer > 1) ?  WRITE_MULTIPLE_BLOCKS : WRITE_SINGLE_BLOCK;
+	}
+	else {
+		command = (blocks_to_transfer > 1) ? READ_MULTIPLE_BLOCKS : READ_SINGLE_BLOCK;
+	}
+
+    if (command & IS_APP_CMD) {
+		command &= 0xff;
+
+		if (sd_acommands[command] == SD_CMD_RESERVED(0)) {
+            printk("Invalid command ACMD: %d\n", command);
+			return -1;
+		}
+
+        // rca is derived from line 1862: m_card_rca = (cmd3_resp >> 16) & 0xffff;
+		uint32_t rca = (get32(EMMC_RESP3)>> 16) & 0xffff; 
+
+		if(rca != CARD_RCA_INVALID) {
+			rca = rca << 16;
+		}
+
+		if(emmc_issue_command(command, rca, (uint32_t *)(sd_commands[APP_CMD])) == 0) { 
+            // aka if APP_CMD was sucessfully issued, then we can issue the desired command
+            emmc_issue_command(command, block_no, (uint32_t *)(sd_acommands[command]));
+        }
+	}
+	else {
+		if (sd_commands[command] == SD_CMD_RESERVED(0))	{
+            printk("Invalid command CMD: %d\n", command);
+			return -1;
+		}
+		emmc_issue_command(command, block_no, (uint32_t *)(sd_commands[command]));
+	}
+    return 0;
+}
+
+
+
+
