@@ -262,5 +262,18 @@ static int do_data_command (int is_write, uint8_t *buf, size_t buf_size, int32_t
 }
 
 
+int do_read (uint8_t *buf, size_t buf_size, uint32_t block_no) {
+    if (do_data_command (0, buf, buf_size, block_no) < 0) {
+		return -1;
+	}
+    return buf_size;
+}
+
+int do_write (uint8_t *buf, size_t buf_size, uint32_t block_no) {
+    if (do_data_command (1, buf, buf_size, block_no) < 0) {
+		return -1;
+	}
+    return buf_size;
+}
 
 
