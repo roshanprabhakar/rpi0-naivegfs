@@ -211,6 +211,12 @@ static int emmc_issue_command(uint32_t command,
 }
 
 
+int card_reset (void) {
+
+    return 0;
+}
+
+
 static int do_data_command (int is_write, uint8_t *buf, size_t buf_size, int32_t block_no) {
     
     /* NOTE: We might need to use byte addresses instead of block (?)
@@ -263,6 +269,7 @@ static int do_data_command (int is_write, uint8_t *buf, size_t buf_size, int32_t
 
 
 int do_read (uint8_t *buf, size_t buf_size, uint32_t block_no) {
+    // TO DO: Add check to ensure data mode
     if (do_data_command (0, buf, buf_size, block_no) < 0) {
 		return -1;
 	}
@@ -270,6 +277,7 @@ int do_read (uint8_t *buf, size_t buf_size, uint32_t block_no) {
 }
 
 int do_write (uint8_t *buf, size_t buf_size, uint32_t block_no) {
+    // TO DO: Add check to ensure data mode
     if (do_data_command (1, buf, buf_size, block_no) < 0) {
 		return -1;
 	}
