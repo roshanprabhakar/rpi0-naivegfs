@@ -33,13 +33,9 @@ int pi_done_scan(char c) {
 	return idx == sizeof(exit_string) - 1;
 }
 
-
-void reap_pi(pi *pies, int npies, int selected_pi) {
-	pies[selected_pi].open = 0;
+void reap_pi(pi *pies, int selected_pi) {
 	close(pies[selected_pi].fd);
-	int replacement_pi = selected_pi + 1;
-	if(replacement_pi == npies) replacement_pi = 0;
-	pies[selected_pi] = pies[replacement_pi];
+	pies[selected_pi].open = 0;
 }
 
 /* Performs a round robin search of the booted raspberry pies,
@@ -52,6 +48,8 @@ void reap_pi(pi *pies, int npies, int selected_pi) {
  * unifiedfd: probably stdout_fd
  */
 void get_pi_output(pi *pies, int npies, int unifiedfd) {
+
+	printf("Dumping output from %d connected pies.\n", npies);
 
 	// Stop watching for reads after 10 seconds.
 	struct timeval all_pies_read_timeout = {
@@ -70,7 +68,7 @@ void get_pi_output(pi *pies, int npies, int unifiedfd) {
 	int prev_pi = -1;
 	int prev_fd = -1;
 
-	while(1) {
+	for(int i = 0; i < 10; ++i) {
 
 		// Reset needed, confirmed by man select.
 		// Select modifies this by the end of return to indicate which
@@ -83,9 +81,9 @@ void get_pi_output(pi *pies, int npies, int unifiedfd) {
 				if(pies[i].fd > maxfd) maxfd = pies[i].fd;
 			}
 		}
-		
+
 		if(maxfd == -1) {
-			// All pies are closed.
+			printf("All pies have exited, shutting down.\n");
 			break;	
 		}
 
@@ -95,20 +93,20 @@ void get_pi_output(pi *pies, int npies, int unifiedfd) {
 		// If returned but none ready, terminate.
 		if(num_ready == 0) {
 			printf("%d seconds passed, no pi has responded, exiting.\n", PI_READ_TIMEOUT_SECS);
-			return;
+			break;
 		}
 
 		// Select the next pi to read from. Begin search right after previously
 		// selected pi.
-		int selected_pi = prev_pi + 1;
-		while(selected_pi != prev_pi && 
-					pies[selected_pi].fd == prev_fd &&
-					!FD_ISSET(pies[selected_pi].fd, &read_fds)) {
 
+		int selected_pi = prev_pi;
+		do {
 			++selected_pi;
-		}
+			if(selected_pi == npies) selected_pi = 0;
+		} while(selected_pi != prev_pi && !pies[selected_pi].open);
 
 		int fd = prev_fd = pies[selected_pi].fd;
+		printf("Dumping data from pi<%d>\n", fd);
 
 		// Drain this fd, then wait for a specified timeout. If data becomes available
 		// before the timeout, flush again. Repeat indefinitely.
@@ -118,7 +116,7 @@ void get_pi_output(pi *pies, int npies, int unifiedfd) {
 
 			if(n < 0) {
 				printf("pi<%d> closed, cleaning up..\n", fd);
-				reap_pi(pies, npies, selected_pi);
+				reap_pi(pies, selected_pi);
 				break;
 
 			} else if(n == 0) {
@@ -140,7 +138,7 @@ void get_pi_output(pi *pies, int npies, int unifiedfd) {
 
 				if(done) {
 					printf("DONE received from pi<%d>, cleaning up..\n", fd);
-					reap_pi(pies, npies, selected_pi);	
+					reap_pi(pies, selected_pi);	
 					break;	
 
 				} else {
