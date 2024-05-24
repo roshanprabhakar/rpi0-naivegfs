@@ -1,5 +1,5 @@
 #include "rpi.h"
-#include "sd.h"
+#include "bzt-sd.h"
 
 // Defined by the linker. They only have addresses, not
 // values.
@@ -42,14 +42,7 @@ void _cstart() {
 
 // All application level code must get thrown into here.
 void entry() {
-	putk("Testing SD driver.\n");
 
-	uint8_t to_write[512 * 2];
-	for(int i = 0; i < 512 * 2 / 4; ++i) {
-		((uint32_t *)to_write)[i] = 0xdeadbeef;
-	}
-
-	do_data_command(1, (uint32_t *)to_write, 78125000);
 
 	putk("DONE!!!\n");
 	return;

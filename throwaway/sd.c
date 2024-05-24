@@ -56,7 +56,8 @@ error_interrupts_triggered(uint32_t ints) {
 static inline int
 only_timeout_error_interrupt(uint32_t ints) {
 	if(!ints) return 0;
-	return (error_interrupts_triggered(ints) == SD_INT_DATA_TIMEOUT_ERR);
+	return (error_interrupts_triggered(ints) == 
+			SD_INT_DATA_TIMEOUT_ERR);
 }
 
 // Checks if SD card removal is in the set of interrupts passed.
@@ -357,7 +358,6 @@ static int emmc_issue_command(
 
 	return 0;
 }
-
 
 int do_data_command(
 		int is_write, uint32_t *buf, uint32_t block_no

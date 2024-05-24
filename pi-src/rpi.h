@@ -5,6 +5,14 @@
 #include <stddef.h>
 #include <stdarg.h>
 
+/* Timer functions */
+void delay_cycles(uint32_t);
+
+uint32_t timer_get_usec_raw(void);
+void delay_us(uint32_t);
+void delay_ms(uint32_t);
+void delay_sec(uint32_t);
+
 /* From start.S */
 
 void put32(int addr, int v);
@@ -43,5 +51,6 @@ int vsnprintk(char *buf, unsigned buflen, const char *fmt,
 
 /* Other */
 void rpi_wait(void);
+
 
 #endif

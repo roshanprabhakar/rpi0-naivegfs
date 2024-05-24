@@ -4,7 +4,7 @@
 
 // This is the main interface to the micro SD card. Relevant
 // info can be found from page 66 of the bcm2835 docs.
-#define EMMC_BASE (0x7E300000)
+#define EMMC_BASE (0x20300000)
 #define SD_BLOCK_SIZE 512
 #define SD_BLOCK_COUNT 2
 
