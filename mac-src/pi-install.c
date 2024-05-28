@@ -88,6 +88,8 @@ int main(int argc, char const **argv) {
 
 	}
 
+	//..send commands, read commands, etc..
+
 	// Now that all pies have been booted up successfully, start
 	// reading their outputs.
 	get_pi_output(pies, num_pies, STDOUT_FILENO);

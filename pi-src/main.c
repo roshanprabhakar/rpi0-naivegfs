@@ -1,28 +1,11 @@
 #include "rpi.h"
 #include "bzt-sd.h"
+#include "fat32.h"
 
 // Defined by the linker. They only have addresses, not
 // values.
 extern int bss_start;
 extern int bss_end;
-
-// Expects a len divisible by word size (sizeof(uint32_t))
-void *memset(void *ptr, uint32_t b, uint32_t len) {
-	uint32_t buf;
-	for(uint32_t i = 0; i < sizeof(uint32_t); ++i) {
-		((uint8_t *)&buf)[i] = (uint8_t)b;
-	}
-
-	for(uint32_t i = 0; i < len / sizeof(uint32_t); ++i) {
-		((uint32_t *)ptr)[i] = buf;
-	}
-
-	for(uint32_t i = len / sizeof(uint32_t) * sizeof(uint32_t);
-			i < len; ++i) {
-		((uint8_t *)ptr)[i] = (uint8_t)b;
-	}
-	return ptr;
-}
 
 // Called to setup the C runtime and initialize commonly used 
 // subsystems.
@@ -34,6 +17,12 @@ void _cstart() {
 
 	// Initialize hardware uart.
 	uart_init();
+
+	// Initialize the SD card.
+	sd_init();
+
+	// Initialize the fat32 system on the SD card.
+	fat32_init(sd_readblock);	
 	
 	// Jump to main app-level code.
 	entry();
@@ -42,7 +31,7 @@ void _cstart() {
 
 // All application level code must get thrown into here.
 void entry() {
-
+	fat32_get_partition_info();
 
 	putk("DONE!!!\n");
 	return;

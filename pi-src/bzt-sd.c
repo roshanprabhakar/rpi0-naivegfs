@@ -29,8 +29,10 @@
 #include "bzt-sd.h"
 
 #define wait_msec delay_ms
-#define uart_puts printk
-#define uart_hex(h) printk("%x", (h))
+// #define uart_puts printk
+// #define uart_hex(h) printk("%x", (h))
+#define uart_puts ignore
+#define uart_hex(h) ignore("%x", (h))
 #define wait_cycles delay_cycles
 
 #define EMMC_ARG2           ((volatile unsigned int*)(MMIO_BASE+0x00300000))

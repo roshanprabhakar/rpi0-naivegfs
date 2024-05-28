@@ -34,6 +34,10 @@ void uart_flush_tx(void);
 
 /* Output routines. */
 
+// Ignore the string (useful for replacing output
+// routines for drop-in code).
+int ignore(const char *fmt, ...);
+
 // Emit a single string.
 int putk(const char *msg);
 
@@ -52,5 +56,6 @@ int vsnprintk(char *buf, unsigned buflen, const char *fmt,
 /* Other */
 void rpi_wait(void);
 
+void *memset(void *, uint32_t, uint32_t);
 
 #endif
