@@ -5,6 +5,9 @@
 #include <stddef.h>
 #include <stdarg.h>
 
+/* Error handling */
+void panic(const char *msg);
+
 /* Timer functions */
 void delay_cycles(uint32_t);
 
@@ -17,6 +20,8 @@ void delay_sec(uint32_t);
 
 void put32(int addr, int v);
 int get32(int addr);
+
+void _halt(void);
 
 void BRANCHTO(void (*fn)(void));
 
@@ -55,7 +60,6 @@ int vsnprintk(char *buf, unsigned buflen, const char *fmt,
 
 /* Other */
 void rpi_wait(void);
-
 void *memset(void *, uint32_t, uint32_t);
 
 #endif

@@ -31,7 +31,8 @@ void _cstart() {
 
 // All application level code must get thrown into here.
 void entry() {
-	fat32_get_partition_info();
+
+	fat32_get_info();
 
 	putk("DONE!!!\n");
 	return;

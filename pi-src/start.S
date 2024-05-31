@@ -18,6 +18,7 @@ _start:
 	bl _cstart 						@ call our code to do initialization.
 	b _halt								@ if they return, just hang.
 
+.globl _halt
 _halt:
 	nop
 	b _halt
