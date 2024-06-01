@@ -37,6 +37,7 @@ pi_support_obj := $(shell find . -wholename "./ext-bin/*.o")
 # Build mac-side and pi-side binaries, after making build/...
 # First rule in the Makefile, automatically run.
 all: init pibin macbin
+	./build/mac/deploy ./build/pi/pi-side.bin
 
 ######################### MAC SIDE #########################
 
