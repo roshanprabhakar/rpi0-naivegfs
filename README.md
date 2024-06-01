@@ -1,5 +1,4 @@
-# Paper Title:
-Designing a distributed data store over bare-metal Raspberry Pi.
+# Designing a distributed data store over bare-metal Raspberry Pi.
 
 ### Abstract
 This paper presents a primitive distributed filesystem, implemented over
