@@ -32,7 +32,7 @@ void _cstart() {
 // All application level code must get thrown into here.
 void entry() {
 
-	fat32_get_info();
+	fat32_inspect_dir(FAT32_ROOT_CLUSTER_NO);
 
 	putk("DONE!!!\n");
 	return;

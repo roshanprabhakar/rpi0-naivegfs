@@ -5,12 +5,28 @@
 static int (*readsector)(unsigned lba, unsigned char *buf, unsigned num);
 static int did_init = 0;
 static uint8_t partitions_in_use = 0;
+static int chosen_partition;
 
 static struct mbr boot_sector;
 static struct volume_id all_vol_ids[4];
 static struct fat_volume_data vol_data[4];
 
-static void fat32_dump_vol_id(struct volume_id *vol_id) {
+extern int kernel_end; // The address of this variable is defined by the
+											 // linker script. Take its address to determine 
+											 // where in memory the kernel ends. As a hack to
+											 // get around the need to dynamically allocate 
+											 // memory for the FAT, we will just place the
+											 // FAT here, and initialize it once at boot.
+											 // This works since we never need to dynamic
+											 // allocation again. If we do, we either get a 
+											 // working malloc together quickly, or we are 
+											 // fucked.
+static uint32_t *FAT = (uint32_t *)&kernel_end;
+static uint32_t *FAT_end;
+
+static int fat_init = 0;
+
+void fat32_dump_vol_id(struct volume_id *vol_id) {
 	printk("+-----------------------\n");
 	printk("|bytes per sector: %d\n", vol_id->bytes_per_sector);
 	printk("|sectors per cluster: %d\n", vol_id->sectors_per_cluster);
@@ -23,10 +39,10 @@ static void fat32_dump_vol_id(struct volume_id *vol_id) {
 	printk("+-----------------------\n");
 }
 
-static int fat32_dump_dir_recs(struct dir_sector *ds) {
+int fat32_dump_dir_recs(dir_sector *ds) {
 	struct dir_record *d;
-	for(int i = 0; i < sizeof(*ds)/sizeof(ds->records[0]); ++i) {
-		d = &(ds->records[i]);
+	for(int i = 0; i < sizeof(dir_sector)/sizeof(struct dir_record); ++i) {
+		d = (struct dir_record *)ds + i;
 		if(((uint8_t *)d)[0] == 0) return 1;
 		printk("+-----\n");
 		printk("|name: ");
@@ -46,31 +62,157 @@ static int fat32_dump_dir_recs(struct dir_sector *ds) {
 	return 0;
 }
 
-// Sequential traversal is incorrect, change to use the fat.
-static void inspect_root(int partition_no) {
-	uint32_t root_lba = vol_data[partition_no].cluster_begin_lba;
-	struct dir_sector ds;
-	for(uint32_t i = root_lba;; ++i) {
-		(void)readsector(i, (unsigned char *)&ds, 1);
-		int contains_terminal = fat32_dump_dir_recs(&ds);
-		if(contains_terminal) break;
+uint32_t fat32_next_cluster(uint32_t cur_cluster_no) {
+	if(!did_init) {
+		panic("Attempted to read FAT before fat32 initialization.\n");
+	}
+
+	uint32_t fat_entry = FAT[cur_cluster_no];
+	uint32_t cluster_no = fat_entry & (((uint32_t)-1)>>4);
+	return cluster_no;	
+}
+
+void print_dir_ent_attr(struct dir_record *d) {
+	printk("ro<%d> hidden<%d> sys<%d> volid<%d> dir<%d>\n",
+		IS_RO(d->dir_attr), 
+		IS_HIDDEN(d->dir_attr), 
+		IS_SYSTEM(d->dir_attr),
+		IS_VOLID(d->dir_attr),
+		IS_DIR(d->dir_attr),
+		IS_ARCHIVE(d->dir_attr)
+	);
+}
+
+struct dir_record *print_dir_record(
+		struct dir_record *dr
+	) {
+	
+	// This dirrec indicates that no more will follow, and holds
+	// no local file info.
+	if(IS_TERMINAL(*dr)) { return NULL; }
+
+	// Check whether this entry is part of a long file name (LFN)
+	int is_lfn = IS_LFN(dr->dir_attr);
+	if(is_lfn) {
+		dr++;
+		print_dir_record(dr);
+		for(int j = 0x1; j < 0xb; ++j) {
+			printk("%c", ((uint8_t *)dr)[j]);
+		}
+		for(int j = 0xe; j < 0x1a; ++j) {
+			printk("%c", ((uint8_t *)dr)[j]);
+		}
+		for(int j = 0x1c; j < 0x1e; ++j) {
+			printk("%c", ((uint8_t *)dr)[j]);
+		}
+	} else {
+		for(int c = 0; c < 11; ++c) { 
+			if(s[i].dir_name[c] == 0) { break; }
+			printk("%c", s[i].dir_name[c]); 
+		}
+		printk("\n");
+	}
+
+	return dr;
+}
+
+uint32_t cluster_no_to_lba(uint32_t cluster_no) {
+	return vol_data[chosen_partition].cluster_begin_lba + 
+		(cluster_no - 2) * vol_data[chosen_partition].sectors_per_cluster;
+}
+
+void read_cluster(uint32_t cluster_no, uint8_t *dst) {
+	uint32_t lba = cluster_no_to_lba(cluster_no);
+	printk("fat32: reading cluster %d (lba %d)\n", cluster_no, lba);
+	for(int i = 0; 
+			i < all_vol_ids[chosen_partition].sectors_per_cluster;
+			++i) {
+
+		readsector(lba++, dst, 1);
+		dst += SD_SECTOR_SIZE;
 	}
 }
 
-int fat32_get_info(void) {
-	if(!did_init) panic("Using fat32 without initialization");
-	return 0;
+void fat32_inspect_dir(uint32_t cluster_no) {
+	if(!did_init) {
+		panic("Attempted to inspect the filesystem before initialization.\n");
+	}
+
+	uint8_t *dst = (uint8_t *)FAT_end;
+	uint8_t *saved_begin = dst;
+	uint32_t bytes_per_cluster = 
+		vol_data[chosen_partition].sectors_per_cluster * 
+		all_vol_ids[chosen_partition].bytes_per_sector;
+
+	do {
+		read_cluster(cluster_no, dst);
+		cluster_no = fat32_next_cluster(cluster_no);
+		dst += bytes_per_cluster;
+	} while(cluster_no != FAT32_TERMINAL_CLUSTER_NO);
+
+	struct dir_record *next = print_dir_record((struct dir_record *)saved_begin);
+
+	return;
+
+#if 0
+	if(indent > 5) return;
+
+	dir_sector s;
+	uint32_t lba = (cluster_no - 2) * 
+		vol_data[chosen_partition].sectors_per_cluster + 
+		vol_data[chosen_partition].cluster_begin_lba;
+
+	(void)readsector(lba, (unsigned char *)s, 1);
+	for(int i = 0; i < sizeof(s)/sizeof(struct dir_record); ++i) {
+		if(IS_TERMINAL(s[i])) { 
+			printk("Encountered dir terminal.\n");
+			return;
+		}
+		print_dir_entries(s);
+		if(IS_LFN(s[i].dir_attr)) {
+			for(int j = 0x1; j < 0xb; ++j) {
+				printk("%c", ((uint8_t *)(&s[i]))[j]);
+			}
+			for(int j = 0xe; j < 0x1a; ++j) {
+				printk("%c", ((uint8_t *)(&s[i]))[j]);
+			}
+			for(int j = 0x1c; j < 0x1e; ++j) {
+				printk("%c", ((uint8_t *)(&s[i]))[j]);
+			}
+		} else {
+			for(int c = 0; c < 11; ++c) { 
+				if(s[i].dir_name[c] == 0) { break; }
+				printk("%c", s[i].dir_name[c]); 
+			}
+			printk("\n");
+		}
+	}
+	uint32_t next_cluster_no = fat32_next_cluster(cluster_no);
+	printk("next cluster no: %x\n", next_cluster_no);
+	if(next_cluster_no == -1) { return; }
+#endif
 }
 
 int fat32_init(int (*read)(unsigned, unsigned char *, unsigned)) {
 	readsector = read;
 	(void)readsector(MBR_SECTOR, (unsigned char *)&boot_sector, 1);
 
+	int num_valid_partitions = 0;
 	for(int i = 0; i < 4; ++i) {
 		struct partition *s = &boot_sector.partitions[i];
 		if(s->num_sectors != 0) {
-			partitions_in_use |= 1<<i;
+			chosen_partition = i;
+			if(++num_valid_partitions == 2) {
+				panic("Found more than 1 valid partitions on this pi, don't know which to choose.\n");
+			} 			partitions_in_use |= 1<<i;
+
 			(void)readsector(s->lba_begin, (unsigned char *)&all_vol_ids[i], 1);
+
+			if((uint32_t)all_vol_ids[i].bytes_per_sector != SD_SECTOR_SIZE) {
+				printk("bps: %d, sector size: %d\n", 
+						all_vol_ids[i].bytes_per_sector, SD_SECTOR_SIZE);
+				panic("Partition uses different sector size than sd driver.\n");
+			}
 
 			printk("+-----------------------\n");
 			printk("|Fat32 parition [ %d ]\n", i);
@@ -91,10 +233,28 @@ int fat32_init(int (*read)(unsigned, unsigned char *, unsigned)) {
 
 			vol_data[i].root_dir_first_cluster = 
 				all_vol_ids[i].root_dir_first_cluster;
-
-			inspect_root(i);
 		}
 	}
+
+	// Read the FAT into main memory.
+	struct volume_id *v = &all_vol_ids[chosen_partition];
+	struct fat_volume_data *vd = &vol_data[chosen_partition];
+
+	struct sector {
+		uint32_t data[SD_SECTOR_SIZE];
+	};
+
+	int i = 0;
+	for(; i < v->sectors_per_fat; ++i) {
+		struct sector *fat_s = (struct sector *)FAT + i;
+		readsector(
+				vd->fat_begin_lba + i,
+				(unsigned char *)fat_s,
+				1);
+	}
+	FAT_end = (uint32_t *)((uint8_t *)FAT + 
+			(v->bytes_per_sector * v->sectors_per_fat));
+	printk("Done reading %d FAT sectors into memory.\n", i);
 
 	did_init = 1;
 	return 0;

@@ -14,8 +14,9 @@ SECTIONS {
 		*(.bss*)
 		. = ALIGN(16);
 		bss_end = .;
+		bss_size = bss_end - bss_start;
 	}
-
-	bss_size = bss_end - bss_start;
+	
+	. = ALIGN(512);
 	kernel_end = .;
 }

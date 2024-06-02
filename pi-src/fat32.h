@@ -4,6 +4,10 @@
 #define SD_SECTOR_SIZE 512
 #define MBR_SECTOR 0
 
+#define FAT32_ROOT_CLUSTER_NO 2
+
+#define FAT32_TERMINAL_CLUSTER_NO (((uint32_t)-1)>>4)
+
 int fat32_init(int (*)(unsigned, unsigned char *, unsigned));
 int fat32_get_info(void);
 
@@ -45,6 +49,21 @@ struct fat_volume_data {
 	uint32_t root_dir_first_cluster;
 };
 
+
+// Invoked on instances of (struct dir_record).dir_attr
+#define IS_RO(attr) (((attr) & (1<<0)) != 0)
+#define IS_HIDDEN(attr) (((attr) & (1<<1)) != 0)
+#define IS_SYSTEM(attr) (((attr) & (1<<2)) != 0)
+#define IS_VOLID(attr) (((attr) & (1<<3)) != 0)
+#define IS_DIR(attr) (((attr) & (1<<4)) != 0)
+#define IS_ARCHIVE(attr) (((attr) & (1<<5)) != 0)
+
+#define IS_LFN(attr) ((attr) == 0x0f)
+#define LFN_IS_LAST_ENT(attr) ((attr) & (1<<6))
+
+// Invoked on instances of struct dir_record
+#define IS_TERMINAL(dr) ((dr).dir_name[0] == 0)
+
 struct __attribute__((packed)) dir_record {
 	unsigned char dir_name[11];
 	uint8_t dir_attr;
@@ -55,10 +74,8 @@ struct __attribute__((packed)) dir_record {
 	uint32_t dir_file_size;
 };
 
-struct __attribute__((packed)) dir_sector {
-	struct dir_record records[16];
-};
+typedef struct dir_record dir_sector[16];
 
-
+void fat32_inspect_dir(uint32_t cluster_no);
 
 #endif // _FAT32_H_

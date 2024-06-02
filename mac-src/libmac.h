@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <dirent.h>
+#include <stdlib.h>
 
 #include "bootpi.h"
 
@@ -14,7 +15,10 @@
 
 #define ARRAY_LEN(arr) (sizeof(arr)/sizeof(arr[0]))
 
-#define panic(fmt, ...) fprintf(stderr, fmt,##__VA_ARGS__)
+#define panic(fmt, ...) { \
+	fprintf(stderr, fmt,##__VA_ARGS__); \
+	exit(-1); \
+}
 
 struct dirent **get_connected_pies(int *);
 void free_pie_list(struct dirent **, int);
