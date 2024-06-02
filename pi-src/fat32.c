@@ -83,6 +83,9 @@ void print_dir_ent_attr(struct dir_record *d) {
 	);
 }
 
+// TODO in the is_lfn section, convert uint16_t utf16 chars into
+// uint8_t ascii chars. We need to do this without a library. 
+// This should work after that though.
 struct dir_record *print_dir_record(
 		struct dir_record *dr
 	) {
@@ -93,24 +96,33 @@ struct dir_record *print_dir_record(
 
 	// Check whether this entry is part of a long file name (LFN)
 	int is_lfn = IS_LFN(dr->dir_attr);
+	printk("LFN<%d>", is_lfn);
 	if(is_lfn) {
+		char c;
 		dr++;
 		print_dir_record(dr);
-		for(int j = 0x1; j < 0xb; ++j) {
-			printk("%c", ((uint8_t *)dr)[j]);
+		for(int j = 0x1; j < 0xb; j += 2) {
+			c = ((uint8_t *)dr)[j];
+			if(c == 0) return dr;
+			printk("%c", c);
 		}
-		for(int j = 0xe; j < 0x1a; ++j) {
-			printk("%c", ((uint8_t *)dr)[j]);
+		for(int j = 0xe; j < 0x1a; j += 2) {
+			c = ((uint8_t *)dr)[j];
+			if(c == 0) return dr;
+			printk("%c", c);
 		}
-		for(int j = 0x1c; j < 0x1e; ++j) {
-			printk("%c", ((uint8_t *)dr)[j]);
+		for(int j = 0x1c; j < 0x1e; j += 2) {
+			c = ((uint8_t *)dr)[j];
+			if(c == 0) return dr;
+			printk("%c", c);
 		}
 	} else {
 		for(int c = 0; c < 11; ++c) { 
-			if(s[i].dir_name[c] == 0) { break; }
-			printk("%c", s[i].dir_name[c]); 
+			if (dr->dir_name[c] == 0) { break; }
+			printk("%c", dr->dir_name[c]); 
 		}
 		printk("\n");
+		return dr + 1;
 	}
 
 	return dr;
@@ -144,53 +156,17 @@ void fat32_inspect_dir(uint32_t cluster_no) {
 		vol_data[chosen_partition].sectors_per_cluster * 
 		all_vol_ids[chosen_partition].bytes_per_sector;
 
+	printk("Getting the directory cluster.\n");
 	do {
 		read_cluster(cluster_no, dst);
 		cluster_no = fat32_next_cluster(cluster_no);
 		dst += bytes_per_cluster;
 	} while(cluster_no != FAT32_TERMINAL_CLUSTER_NO);
 
-	struct dir_record *next = print_dir_record((struct dir_record *)saved_begin);
-
-	return;
-
-#if 0
-	if(indent > 5) return;
-
-	dir_sector s;
-	uint32_t lba = (cluster_no - 2) * 
-		vol_data[chosen_partition].sectors_per_cluster + 
-		vol_data[chosen_partition].cluster_begin_lba;
-
-	(void)readsector(lba, (unsigned char *)s, 1);
-	for(int i = 0; i < sizeof(s)/sizeof(struct dir_record); ++i) {
-		if(IS_TERMINAL(s[i])) { 
-			printk("Encountered dir terminal.\n");
-			return;
-		}
-		print_dir_entries(s);
-		if(IS_LFN(s[i].dir_attr)) {
-			for(int j = 0x1; j < 0xb; ++j) {
-				printk("%c", ((uint8_t *)(&s[i]))[j]);
-			}
-			for(int j = 0xe; j < 0x1a; ++j) {
-				printk("%c", ((uint8_t *)(&s[i]))[j]);
-			}
-			for(int j = 0x1c; j < 0x1e; ++j) {
-				printk("%c", ((uint8_t *)(&s[i]))[j]);
-			}
-		} else {
-			for(int c = 0; c < 11; ++c) { 
-				if(s[i].dir_name[c] == 0) { break; }
-				printk("%c", s[i].dir_name[c]); 
-			}
-			printk("\n");
-		}
-	}
-	uint32_t next_cluster_no = fat32_next_cluster(cluster_no);
-	printk("next cluster no: %x\n", next_cluster_no);
-	if(next_cluster_no == -1) { return; }
-#endif
+	struct dir_record *dir_rec = (struct dir_record *)saved_begin;
+	do {
+		dir_rec = print_dir_record(dir_rec);
+	} while(dir_rec != NULL);
 }
 
 int fat32_init(int (*read)(unsigned, unsigned char *, unsigned)) {
@@ -244,6 +220,7 @@ int fat32_init(int (*read)(unsigned, unsigned char *, unsigned)) {
 		uint32_t data[SD_SECTOR_SIZE];
 	};
 
+	printk("Reading the FAT into main memory...\n");
 	int i = 0;
 	for(; i < v->sectors_per_fat; ++i) {
 		struct sector *fat_s = (struct sector *)FAT + i;

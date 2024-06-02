@@ -4,7 +4,7 @@
 #include <sys/select.h>
 #include <unistd.h>
 
-#define PI_READ_TIMEOUT_SECS 5
+#define PI_READ_TIMEOUT_SECS 50
 
 #define PI_READ_SIZE 4096
 
