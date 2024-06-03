@@ -11,16 +11,7 @@ static struct mbr boot_sector;
 static struct volume_id all_vol_ids[4];
 static struct fat_volume_data vol_data[4];
 
-extern int kernel_end; // The address of this variable is defined by the
-											 // linker script. Take its address to determine 
-											 // where in memory the kernel ends. As a hack to
-											 // get around the need to dynamically allocate 
-											 // memory for the FAT, we will just place the
-											 // FAT here, and initialize it once at boot.
-											 // This works since we never need to dynamic
-											 // allocation again. If we do, we either get a 
-											 // working malloc together quickly, or we are 
-											 // fucked.
+extern int kernel_end; 
 static uint32_t *FAT = (uint32_t *)&kernel_end;
 static uint32_t *FAT_end;
 
@@ -98,24 +89,27 @@ struct dir_record *print_dir_record(
 	int is_lfn = IS_LFN(dr->dir_attr);
 	printk("LFN<%d>", is_lfn);
 	if(is_lfn) {
-		char c;
+		wchar_t c;
 		dr++;
 		print_dir_record(dr);
+
+#if 0
 		for(int j = 0x1; j < 0xb; j += 2) {
-			c = ((uint8_t *)dr)[j];
+			c = (wchar_t)(((uint16_t *)dr)[j/2]);
 			if(c == 0) return dr;
-			printk("%c", c);
+			if(c != '\n') putwchar(c);
 		}
 		for(int j = 0xe; j < 0x1a; j += 2) {
-			c = ((uint8_t *)dr)[j];
+			c = (wchar_t)(((uint16_t *)dr)[j/2]);
 			if(c == 0) return dr;
-			printk("%c", c);
+			if(c != '\n') putwchar(c);
 		}
 		for(int j = 0x1c; j < 0x1e; j += 2) {
-			c = ((uint8_t *)dr)[j];
+			c = (wchar_t)(((uint16_t *)dr)[j/2]);
 			if(c == 0) return dr;
-			printk("%c", c);
+			if(c != '\n') putwchar(c);
 		}
+#endif
 	} else {
 		for(int c = 0; c < 11; ++c) { 
 			if (dr->dir_name[c] == 0) { break; }
@@ -149,6 +143,8 @@ void fat32_inspect_dir(uint32_t cluster_no) {
 	if(!did_init) {
 		panic("Attempted to inspect the filesystem before initialization.\n");
 	}
+
+	printk("wide char size: %d\n", sizeof(wchar_t));
 
 	uint8_t *dst = (uint8_t *)FAT_end;
 	uint8_t *saved_begin = dst;

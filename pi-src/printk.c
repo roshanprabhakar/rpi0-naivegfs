@@ -5,6 +5,25 @@ static int putchar(int c) {
 	return c;
 }
 
+int putwchar(wchar_t c) {
+	if(c <= 0x7f) {
+		return putchar((char)c);
+	} else if(c <= 0x7ff) {
+		putchar(0xC0 | (c >> 6));
+		putchar(0x80 | (c & 0x3F));
+	} else if(c <= 0xffff) {
+		putchar(0xE0 | (c >> 12));
+		putchar(0x80 | ((c >> 6) & 0x3F));
+		putchar(0x80 | (c & 0x3F));
+	} else if(c <= 0x10ffff) {
+		putchar(0xF0 | (c >> 18));
+		putchar(0x80 | ((c >> 12) & 0x3F));
+		putchar(0x80 | ((c >> 6) & 0x3F));
+		putchar(0x80 | (c & 0x3F));
+	} else { return -1; }
+	return c;
+}
+
 static void emit_val(unsigned base, uint32_t u) {
     char num[33], *p = num;
 

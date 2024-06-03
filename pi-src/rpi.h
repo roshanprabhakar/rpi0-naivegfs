@@ -52,6 +52,9 @@ int printk(const char *fmt, ...);
 // vprintf with a lot of restrictions.
 int vprintk(const char *fmt, va_list ap);
 
+// Needed to print utf16 characters.
+int putwchar(wchar_t c);
+
 // print string to <buf>
 #include <stdarg.h>
 int snprintk(char *buf, unsigned buflen, const char *fmt, ...);
