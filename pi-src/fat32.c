@@ -1,8 +1,10 @@
 #include "rpi.h"
 #include "fat32.h"
+//#include <string.h>
 
 // Reads (sector lba, buffer dst, number of sectors)
 static int (*readsector)(unsigned lba, unsigned char *buf, unsigned num);
+static int (*writesector)(const unsigned char *buf, unsigned int lba, unsigned int num);
 static int did_init = 0;
 static uint8_t partitions_in_use = 0;
 static int chosen_partition;
@@ -97,7 +99,8 @@ struct dir_record *print_dir_record(
 	// Check whether this entry is part of a long file name (LFN)
 	int is_lfn = IS_LFN(dr->dir_attr);
 	printk("LFN<%d>", is_lfn);
-	if(is_lfn) {
+
+    if(is_lfn) {
 		char c;
 		dr++;
 		print_dir_record(dr);
@@ -169,8 +172,9 @@ void fat32_inspect_dir(uint32_t cluster_no) {
 	} while(dir_rec != NULL);
 }
 
-int fat32_init(int (*read)(unsigned, unsigned char *, unsigned)) {
+int fat32_init(int (*read)(unsigned, unsigned char *, unsigned), int (*write)(const unsigned char *, unsigned int, unsigned int)) {
 	readsector = read;
+    writesector = write;
 	(void)readsector(MBR_SECTOR, (unsigned char *)&boot_sector, 1);
 
 	int num_valid_partitions = 0;
@@ -236,3 +240,146 @@ int fat32_init(int (*read)(unsigned, unsigned char *, unsigned)) {
 	did_init = 1;
 	return 0;
 }
+
+
+// Find the first free cluster in the FAT table
+uint32_t find_free_cluster() {
+    for (uint32_t i = 2; i < ((FAT_end - FAT) / sizeof(uint32_t)); i++) {
+        if (FAT[i] == 0) {
+            return i;
+        }
+    }
+    return 0; // No free clusters found
+}
+
+
+// Writes a cluster to the pi
+void write_cluster(uint32_t cluster_no, uint8_t *src) {
+    uint32_t lba = cluster_no_to_lba(cluster_no);
+    printk("fat32: writing cluster %d (lba %d)\n", cluster_no, lba);
+    for (int i = 0; i < all_vol_ids[chosen_partition].sectors_per_cluster; ++i) {
+        writesector(src, lba++, 1);
+        src += SD_SECTOR_SIZE;
+    }
+}
+
+
+char *strcpy(char *dest, const char *src, size_t n) {
+    size_t i;
+
+    // Copy characters from src to dest until n characters are copied or
+    // a null character is encountered in src
+    for (i = 0; i < n && src[i] != '\0'; i++) {
+        dest[i] = src[i];
+    }
+
+    // If less than n characters were copied, pad dest with null characters
+    for (; i < n; i++) {
+        dest[i] = '\0';
+    }
+
+    return dest;
+}
+
+void create_file(const char *filename, uint8_t *data, uint32_t size) {
+    if (!did_init) {
+        panic("Attempted to write to filesystem before initialization.\n");
+    }
+
+    // Read the FAT into main memory
+    struct volume_id *v = &all_vol_ids[chosen_partition];
+    struct fat_volume_data *vd = &vol_data[chosen_partition];
+
+    // Calcultes bytes per cluster by getting the number of sectors per cluster then the number
+    // of bytes per sector
+    uint32_t bytes_per_cluster =
+        vol_data[chosen_partition].sectors_per_cluster *
+        all_vol_ids[chosen_partition].bytes_per_sector;
+
+    // Get the first cluster number of the root directory for the chosen partition
+    uint32_t cluster_no = vol_data[chosen_partition].root_dir_first_cluster;
+
+    // Points to first spot of memory after FAT (need to check if I have to skip anything for special
+    // reserved... I don't think so but just a TO DO check)
+    uint8_t *dir_cluster = (uint8_t *)FAT_end;
+
+    // Reads the first cluster and calls it a dir cluster so we have a place to start looking
+    // (this all feels a bit clunky to me... can probably be optimized)
+    read_cluster(cluster_no, dir_cluster);
+
+    struct dir_record *dr = (struct dir_record *)dir_cluster;
+    struct dir_record *free_entry = NULL;
+
+    // Find a free directory entry
+    for (int i = 0; i < sizeof(dir_sector) / sizeof(struct dir_record); ++i) {
+        if (((uint8_t *)dr)[0] == 0) {
+            free_entry = dr;
+            break;
+        }
+        dr++;
+    }
+
+    if (!free_entry) {
+        panic("No free directory entry found.\n");
+    }
+
+    // Set all bytes in the memory block pointed to by free_entry to zero
+    memset(free_entry, 0, sizeof(struct dir_record));
+    // Copy the file name into the dir_name field of the directory entry
+    strcpy(free_entry->dir_name, filename, sizeof(free_entry->dir_name));
+
+    // Set attr to be Archive since it's been changed since the last backup... but since
+    // we're not doing any error checking this might be wrong and should just be "system"
+    // function...
+    free_entry->dir_attr = ATTR_ARCHIVE;
+    free_entry->dir_file_size = size;
+    free_entry->dir_first_cluster_low = 0;
+    free_entry->dir_first_cluster_high = 0;
+
+    uint32_t first_cluster = 0;
+    uint32_t prev_cluster = 0;
+
+    // Write data to clusters
+    while (size > 0) {
+        uint32_t free_cluster = find_free_cluster();
+
+        // Handle error if no free clusters
+        if (!free_cluster) {
+            panic("No free clusters available.\n");
+        }
+        
+        if (first_cluster == 0) {
+            first_cluster = free_cluster;
+        }
+
+        if (prev_cluster != 0) {
+            FAT[prev_cluster] = free_cluster;
+        }
+
+        uint32_t bytes_to_write = size < bytes_per_cluster ? size : bytes_per_cluster;
+        write_cluster(free_cluster, data);
+
+        size -= bytes_to_write;
+        data += bytes_to_write;
+        prev_cluster = free_cluster;
+    }
+
+    // Mark the last cluster as the end of file
+    FAT[prev_cluster] = FAT32_TERMINAL_CLUSTER_NO;
+
+    // Update the directory entry with the starting cluster
+    free_entry->dir_first_cluster_low = first_cluster & 0xFFFF;
+    free_entry->dir_first_cluster_high = (first_cluster >> 16) & 0xFFFF;
+
+    // Write the updated directory cluster back to the disk
+    write_cluster(cluster_no, dir_cluster);
+
+    // Write the updated FAT back to the disk
+    for (int i = 0; i < v->sectors_per_fat; ++i) {
+        uint32_t *fat_s = FAT + (i * (SD_SECTOR_SIZE / sizeof(uint32_t)));
+        writesector((const unsigned char *)fat_s, vd->fat_begin_lba + i, 1);
+    }
+}
+
+
+

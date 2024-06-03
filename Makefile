@@ -1,4 +1,3 @@
-
 # Choose compiler and flags.
 mac_cc		:= clang
 mac_link_ops := -g -D_FILE_OFFSET_BITS=64

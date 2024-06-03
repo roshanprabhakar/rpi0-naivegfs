@@ -22,7 +22,7 @@ void _cstart() {
 	sd_init();
 
 	// Initialize the fat32 system on the SD card.
-	fat32_init(sd_readblock);	
+	fat32_init(sd_readblock, sd_writeblock);	
 	
 	// Jump to main app-level code.
 	entry();

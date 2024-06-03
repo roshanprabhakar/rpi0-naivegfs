@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 
+
 /* Error handling */
 void panic(const char *msg);
 

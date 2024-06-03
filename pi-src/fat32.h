@@ -8,7 +8,8 @@
 
 #define FAT32_TERMINAL_CLUSTER_NO (((uint32_t)-1)>>4)
 
-int fat32_init(int (*)(unsigned, unsigned char *, unsigned));
+//int fat32_init(int (*)(unsigned, unsigned char *, unsigned));
+int fat32_init(int (*read)(unsigned, unsigned char *, unsigned), int (*write)(const unsigned char *, unsigned int, unsigned int));
 int fat32_get_info(void);
 
 struct __attribute__((packed)) partition {
@@ -60,6 +61,9 @@ struct fat_volume_data {
 
 #define IS_LFN(attr) ((attr) == 0x0f)
 #define LFN_IS_LAST_ENT(attr) ((attr) & (1<<6))
+
+// Bit 5 of attribute is in charge of archive
+#define ATTR_ARCHIVE 0x20
 
 // Invoked on instances of struct dir_record
 #define IS_TERMINAL(dr) ((dr).dir_name[0] == 0)
