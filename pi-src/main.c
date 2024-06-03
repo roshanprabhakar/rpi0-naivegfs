@@ -34,6 +34,9 @@ void entry() {
 
 	fat32_inspect_dir(FAT32_ROOT_CLUSTER_NO);
 
+
+    // Need to add code here to test the write function
+
 	putk("DONE!!!\n");
 	return;
 }
