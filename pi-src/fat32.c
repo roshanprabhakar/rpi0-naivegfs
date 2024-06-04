@@ -17,8 +17,6 @@ extern int kernel_end;
 static uint32_t *FAT = (uint32_t *)&kernel_end;
 static uint32_t *FAT_end;
 
-static int fat_init = 0;
-
 //////////////////////////////////////////////////////////////////////////
 // 
 // Traverse and modify a local FAT.
@@ -54,6 +52,7 @@ uint32_t find_free_local_cluster() {
 	return 0;
 }
 
+#if 0
 // We pass in the cluster number of the final cluster in a file chain.
 // This function will allocate a new cluster, add it to the chain,
 // and return the alloc'd cluster number.
@@ -76,6 +75,7 @@ uint32_t fat32_extend_chain_by_1(uint32_t cur_cluster_no) {
 
 	return next_no;
 }
+#endif
 
 uint32_t alloc_local_file_at(
 		struct dir_record *dr, int num_clusters, char const *name
@@ -145,7 +145,6 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 				uint32_t dirty_lba = cluster_no_to_lba(cur_cluster_no)
 					+ (i * sizeof(struct dir_record) / SD_SECTOR_SIZE);
 				(void)writesector(cluster_data, dirty_lba, 1);
-				
 			}
 		}
 		
