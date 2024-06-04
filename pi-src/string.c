@@ -21,3 +21,11 @@ char *strncpy(char *dst, const char *src, uint32_t n) {
 	return dst;
 }
 
+int strncmp(char const *str1, char const *str2, uint32_t n) {
+	int ret = 0;
+	for(uint32_t i = 0; i < n; ++i) {
+		if(str1[i] != str2[i]) ret = -1;
+		if(str1[i] == 0 || str2[i] == 0) break;
+	}
+	return ret;
+}

@@ -83,5 +83,6 @@ typedef struct dir_record dir_sector[16];
 
 void fat32_inspect_dir(uint32_t cluster_no);
 uint32_t fat32_alloc_local_file(uint32_t, char const *);
+uint32_t fat32_find_cluster_no(char const *, uint32_t);
 
 #endif // _FAT32_H_

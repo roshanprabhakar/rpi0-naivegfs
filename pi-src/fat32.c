@@ -332,6 +332,50 @@ uint32_t alloc_file_in_root() {
 }
 #endif
 
+uint32_t fat32_find_cluster_no(char const *name, uint32_t dir_cluster_no) {
+	if(!did_init) {
+		panic("Attempted to perform an FS query before initialization.\n");
+	}
+
+	struct __attribute__((packed)) {
+		uint32_t data[SD_SECTOR_SIZE];
+		uint8_t terminal_field;
+	} dst;
+	
+	while(dir_cluster_no != -1) {
+
+		for(int sector_no = 0; 
+				sector_no < all_vol_ids[chosen_partition].sectors_per_cluster;
+				++sector_no) {
+
+			readsector(cluster_no_to_lba(dir_cluster_no) + sector_no, 
+								 (unsigned char *)&dst, 1);
+
+
+			struct dir_record *d;
+			for(d = (struct dir_record *)&dst; 
+					d != (struct dir_record *)(&dst.terminal_field);
+					++d) {
+
+				if(IS_TERMINAL(*d)) {
+					return -1;
+				} else {
+					if(strncmp(d->dir_name, name, 11) == 0) {
+						uint32_t cluster_no;
+						((uint16_t *)&cluster_no)[0] = d->dir_first_cluster_low;
+						((uint16_t *)&cluster_no)[1] = d->dir_first_cluster_high;
+						return cluster_no;
+					}
+				}
+			}
+		}
+
+		dir_cluster_no = fat32_next_cluster(dir_cluster_no);
+	}
+
+	return -1;
+}
+
 //////////////////////////////////////////////////////////////////////////
 //
 // Reading and modifying the actual disk.
@@ -374,11 +418,11 @@ void write_cluster(uint32_t cluster_no, uint8_t *src) {
 	}
 }
 
-/////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 // 
 // Inspect FAT metadata routines.
 //
-/////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
 void fat32_dump_vol_id(struct volume_id *vol_id) {
 	printk("+-----------------------\n");
@@ -461,9 +505,11 @@ void fat32_inspect_dir(uint32_t cluster_no) {
 		if(!IS_LFN(dir_rec->dir_attr)) {
 			printk("[idx: %d] ", (dir_rec - (struct dir_record *)saved_begin));
 
+			printk("<");
 			for(int i = 0; i < sizeof(dir_rec->dir_name); ++i) {
 				printk("%c", dir_rec->dir_name[i]);
 			}
+			printk(">");
 			printk("\t");
 			uint32_t cluster_no;
 			((uint16_t *)&cluster_no)[0] = dir_rec->dir_first_cluster_low;
