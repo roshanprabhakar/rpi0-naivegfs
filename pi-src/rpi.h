@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdarg.h>
 
+
 /* Error handling */
 void panic(const char *msg);
 
@@ -64,5 +65,6 @@ int vsnprintk(char *buf, unsigned buflen, const char *fmt,
 /* Other */
 void rpi_wait(void);
 void *memset(void *, uint32_t, uint32_t);
+char *strncpy(char *, const char *, uint32_t);
 
 #endif

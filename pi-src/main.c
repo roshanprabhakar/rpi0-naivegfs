@@ -22,7 +22,7 @@ void _cstart() {
 	sd_init();
 
 	// Initialize the fat32 system on the SD card.
-	fat32_init(sd_readblock);	
+	fat32_init(sd_readblock, sd_writeblock);	
 	
 	// Jump to main app-level code.
 	entry();
@@ -34,6 +34,7 @@ void entry() {
 
 	fat32_inspect_dir(FAT32_ROOT_CLUSTER_NO);
 
+	putk("All SD writs done, it is safe to reset the pi.\n");
 	putk("DONE!!!\n");
 	return;
 }
