@@ -100,7 +100,7 @@ uint32_t alloc_local_file_at(
 		allocd_cluster = find_free_local_cluster();
 		FAT[CLUSTER_NO(prev_cluster)] = allocd_cluster;
 		prev_cluster = allocd_cluster;
-		--num_cluster;
+		--num_clusters;
 	}
 
 }
