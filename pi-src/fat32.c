@@ -22,6 +22,8 @@ extern int kernel_end;
 static uint32_t *FAT = (uint32_t *)&kernel_end;
 static uint32_t *FAT_end;
 
+static int fat_modified = 0;
+
 //////////////////////////////////////////////////////////////////////////
 // 
 // Traverse and modify a local FAT.
@@ -57,6 +59,14 @@ uint32_t find_free_local_cluster() {
 	return -1;
 }
 
+// Allocate the first free cluster by markign it as end of file chain.
+//
+uint32_t alloc_free_local_cluster() {
+	uint32_t out = find_free_local_cluster();
+	FAT[CLUSTER_NO(out)] = CLUSTER_NO(-1);
+	return out;
+}
+
 #if 0
 // We pass in the cluster number of the final cluster in a file chain.
 // This function will allocate a new cluster, add it to the chain,
@@ -82,6 +92,14 @@ uint32_t fat32_extend_chain_by_1(uint32_t cur_cluster_no) {
 }
 #endif
 
+void follow_file_chain(uint32_t start_cluster_no) {
+	while(start_cluster_no != -1) {
+		printk("%d ", start_cluster_no);
+		start_cluster_no = FAT[CLUSTER_NO(start_cluster_no)];
+	}
+	printk("%d\n", start_cluster_no);
+}
+
 uint32_t alloc_local_file_at(
 		struct dir_record *dr, int num_clusters, char const *name
 	) {
@@ -90,8 +108,8 @@ uint32_t alloc_local_file_at(
 		dr->dir_name[j] = name[j];
 	}
 
-	uint32_t prev_cluster, allocd_cluster;
-	prev_cluster = allocd_cluster = find_free_local_cluster();
+	uint32_t prev_cluster, allocd_cluster, out;
+	out = prev_cluster = allocd_cluster = alloc_free_local_cluster();
 	--num_clusters;
 
 	dr->dir_first_cluster_low = ((uint16_t *)&allocd_cluster)[0];
@@ -101,21 +119,26 @@ uint32_t alloc_local_file_at(
 	dr->dir_attr = 0;
 
 	// Alloc the rest of the file and populate the FAT.
-	while(num_clusters > 0) {
-		allocd_cluster = find_free_local_cluster();
+	printk("Creating file @ clusters: %u ", allocd_cluster);
+	do {
+		allocd_cluster = alloc_free_local_cluster();
+		printk("%u ", allocd_cluster);
 		FAT[CLUSTER_NO(prev_cluster)] = allocd_cluster;
 		prev_cluster = allocd_cluster;
 		--num_clusters;
-	}
+	} while(num_clusters > 0);
+	printk("\n");
 
-	return -1;
+	FAT[CLUSTER_NO(allocd_cluster)] = -1;	
+	fat_modified = 1;
+	return out;
 }
 
 // Allocates a file of size num_clusters on the local disk, and returns
 // the starting cluster number. The file is always thrown into the
 // root directory of the local system.
 //
-uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
+uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 	if (!did_init) {
 		panic("Attempted to write to filesystem before initialization.\n");
 	}
@@ -134,6 +157,7 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 
 		read_cluster(cur_dir_cluster_no, (uint8_t *)cluster_data);
 		
+		printk("%d\n", sizeof(struct dir_record));
 		for(unsigned long i = 0; i < records_per_cluster; ++i) {
 			if(IS_TERMINAL(cluster_data[i])) {
 
@@ -150,7 +174,13 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 				// Write back dirty sector.
 				uint32_t dirty_lba = cluster_no_to_lba(cur_dir_cluster_no)
 					+ (i * sizeof(struct dir_record) / SD_SECTOR_SIZE);
-				(void)writesector((const unsigned char *)cluster_data, dirty_lba, 1);
+				// (void)writesector((const unsigned char *)cluster_data, dirty_lba, 1);
+				printk("Writing dirty lba: %u\n", dirty_lba);
+				printk("Dir cluster no: %u, cluster start lba: %d\n", 
+						cur_dir_cluster_no, 
+						cluster_no_to_lba(cur_dir_cluster_no));
+
+				follow_file_chain(file_first_cluster_no);
 
 				return file_first_cluster_no;
 			}
@@ -166,8 +196,7 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 		// a free entry. So, allocate a new cluster for the root directory,
 		// and add it to the root directory's cluster chain.
 
-		uint32_t allocd_cluster = find_free_local_cluster();
-		FAT[allocd_cluster] = CLUSTER_NO(-1);	
+		uint32_t allocd_cluster = alloc_free_local_cluster();
 		FAT[prev_dir_cluster_no] = CLUSTER_NO(allocd_cluster);
 
 		// Now, set the end of the fat to the entry, and write it to the
@@ -180,7 +209,13 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 		// Write back dirty sector. The dirty sector is the first sector
 		// of this cluster.
 		uint32_t dirty_lba = cluster_no_to_lba(allocd_cluster);
-		(void)writesector((const unsigned char *)cluster_data, dirty_lba, 1);
+		// (void)writesector((const unsigned char *)cluster_data, dirty_lba, 1);
+		printk("Writing dirty sector %u\n", dirty_lba);
+		printk("Dir cluster no: %u, cluster start lba: %d\n", 
+				cur_dir_cluster_no, 
+				cluster_no_to_lba(cur_dir_cluster_no));
+
+		follow_file_chain(file_first_cluster_no);
 
 		return file_first_cluster_no;
 	}
@@ -439,6 +474,27 @@ int fat32_init(
 
 	did_init = 1;
 	return 0;
+}
+
+void fat32_shutdown() {
+	struct sector {
+		uint32_t data[SD_SECTOR_SIZE];
+	};
+
+	if(fat_modified) {
+		struct volume_id *v = &all_vol_ids[chosen_partition];
+		struct fat_volume_data *vd = &vol_data[chosen_partition];
+
+		printk("Writing the fat back to memory... DO NOT SHUTDOWN PI\n");
+		for(int i = 0; i < v->sectors_per_fat; ++i) {
+			struct sector *fat_s = (struct sector *)FAT + i;
+			writesector(
+					(unsigned char *)fat_s,
+					vd->fat_begin_lba + i,
+					1);
+		}
+		printk("Done writing FAT to disk, it is safe to reset the pi.\n");
+	}
 }
 
 #if 0

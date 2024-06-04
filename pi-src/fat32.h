@@ -10,7 +10,7 @@
 
 //int fat32_init(int (*)(unsigned, unsigned char *, unsigned));
 int fat32_init(int (*read)(unsigned, unsigned char *, unsigned), int (*write)(const unsigned char *, unsigned int, unsigned int));
-int fat32_get_info(void);
+void fat32_shutdown(void);
 
 struct __attribute__((packed)) partition {
 	uint8_t boot_flag;
@@ -82,5 +82,6 @@ struct __attribute__((packed)) dir_record {
 typedef struct dir_record dir_sector[16];
 
 void fat32_inspect_dir(uint32_t cluster_no);
+uint32_t fat32_alloc_local_file(uint32_t, char const *);
 
 #endif // _FAT32_H_

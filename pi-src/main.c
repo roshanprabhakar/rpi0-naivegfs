@@ -33,8 +33,15 @@ void _cstart() {
 void entry() {
 
 	fat32_inspect_dir(FAT32_ROOT_CLUSTER_NO);
+	uint32_t start = fat32_alloc_local_file(3, "new file");
+	// fat32_inspect_dir(FAT32_ROOT_CLUSTER_NO);
+	printk("Allocd file at %d\n", start);
 
-	putk("All SD writes done, it is safe to reset the pi.\n");
+
+
+	// Close the filesystem.
+	// fat32_shutdown();	
+
 	putk("DONE!!!\n");
 	return;
 }
