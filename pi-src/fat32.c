@@ -5,6 +5,11 @@
 // Reads (sector lba, buffer dst, number of sectors)
 static int (*readsector)(unsigned lba, unsigned char *buf, unsigned num);
 static int (*writesector)(const unsigned char *buf, unsigned int lba, unsigned int num);
+
+void read_cluster(uint32_t, uint8_t *);
+void write_cluster(uint32_t, uint8_t *);
+uint32_t cluster_no_to_lba(uint32_t);
+
 static int did_init = 0;
 static uint8_t partitions_in_use = 0;
 static int chosen_partition;
@@ -49,7 +54,7 @@ uint32_t find_free_local_cluster() {
 			return ((uintptr_t)p - (uintptr_t)FAT)/sizeof(uint32_t);
 		}
 	}
-	return 0;
+	return -1;
 }
 
 #if 0
@@ -103,6 +108,7 @@ uint32_t alloc_local_file_at(
 		--num_clusters;
 	}
 
+	return -1;
 }
 
 // Allocates a file of size num_clusters on the local disk, and returns
@@ -144,7 +150,7 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 				// Write back dirty sector.
 				uint32_t dirty_lba = cluster_no_to_lba(cur_dir_cluster_no)
 					+ (i * sizeof(struct dir_record) / SD_SECTOR_SIZE);
-				(void)writesector(cluster_data, dirty_lba, 1);
+				(void)writesector((const unsigned char *)cluster_data, dirty_lba, 1);
 
 				return file_first_cluster_no;
 			}
@@ -174,11 +180,12 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 		// Write back dirty sector. The dirty sector is the first sector
 		// of this cluster.
 		uint32_t dirty_lba = cluster_no_to_lba(allocd_cluster);
-		(void)writesector(cluster_data, dirty_lba, 1);
+		(void)writesector((const unsigned char *)cluster_data, dirty_lba, 1);
 
 		return file_first_cluster_no;
 	}
 
+	return -1;
 }
 
 #if 0
@@ -217,7 +224,7 @@ uint32_t cluster_no_to_lba(uint32_t cluster_no) {
 void read_cluster(uint32_t cluster_no, uint8_t *dst) {
 	uint32_t lba = cluster_no_to_lba(cluster_no);
 	printk("fat32: reading cluster %d (lba %d)\n", cluster_no, lba);
-	for(int i = 0; 
+	for(int i = 0;
 			i < all_vol_ids[chosen_partition].sectors_per_cluster;
 			++i) {
 
