@@ -77,6 +77,95 @@ uint32_t fat32_extend_chain_by_1(uint32_t cur_cluster_no) {
 	return next_no;
 }
 
+uint32_t alloc_local_file_at(
+		struct dir_record *dr, int num_clusters, char const *name
+	) {
+
+	for(int j = 0; j < 11; ++j) { 
+			cluster_data[i].dir_name[j] = name[j];
+	}
+
+
+
+}
+
+// Allocates a file of size num_clusters on the local disk, and returns
+// the starting cluster number. The file is always thrown into the
+// root directory of the local system.
+//
+uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
+	if (!did_init) {
+		panic("Attempted to write to filesystem before initialization.\n");
+	}
+
+	// Find a free directory entry in the root directory, and assign a 
+	// free cluster to it.
+	uint32_t cur_dir_cluster_no = prev_dir_cluster_no =
+		vol_data[chosen_partition].root_dir_first_cluster;
+
+	uint32_t records_per_cluster =
+			(vol_data[chosen_partition].sectors_per_cluster * SD_SECTOR_SIZE) 
+			/ sizeof(struct dir_record);
+
+	struct dir_record *cluster_data = (struct dir_record *)FAT_end;
+	while(cur_dir_cluster_no != -1) {
+
+		read_cluster(cur_cluster_no, (uint8_t *)cluster_data);
+		
+		for(unsigned long i = 0; i < records_per_cluster; ++i) {
+			if(IS_TERMINAL(cluster_data[i])) {
+
+				// Found free space, we will insert the file here. Allocate a new
+				// cluster for the file data, and add the cluster number to this
+				// entry.
+				alloc_local_file_at(cluster_data + i, num_clusters, name);
+
+				// Write back dirty sector.
+			}
+		}
+		
+		prev_cluster_no = cur_cluster_no;
+		cur_cluster_no = fat32_next_cluster(cur_cluster_no);
+	}
+
+	if(cur_cluster_no == -1) {
+
+		// We have reached the end of the root directory without finding
+		// a free entry. So, allocate a new cluster for the root directory,
+		// and add it to the root directory's cluster chain.
+
+		uint32_t allocd_cluster = find_free_local_cluster();
+		FAT[allocd_cluster] = CLUSTER_NO(-1);	
+		FAT[prev_cluster_no] = CLUSTER_NO(allocd_cluster);
+
+		// Now, set the end of the fat to the entry, and write it to the
+		// first sector of the allocated cluster.
+		// TODO
+		alloc_local_file_at(cluster_data, num_clusters, name);
+
+		// Write back dirty sector.
+	}
+
+}
+
+#if 0
+// Returns the starting cluster of the newly allocated file. To find
+// the dir record in the root, just iterate through all dir records
+// until you find one with the correct cluster number.
+uint32_t alloc_file_in_root() {
+	
+
+	// This should be extremely rare.
+	if(cur_cluster_no == -1) {
+		uint32_t allocd_cluster_no = 
+			fat32_extend_chain_by_1(prev_cluster_no);
+
+		// Allocate a new cluster for a file, and add it to the first entry
+		// in this allocated directory cluster.
+	}
+}
+#endif
+
 //////////////////////////////////////////////////////////////////////////
 //
 // Reading and modifying the actual disk.
@@ -187,7 +276,6 @@ void fat32_inspect_dir(uint32_t cluster_no) {
 		vol_data[chosen_partition].sectors_per_cluster * 
 		all_vol_ids[chosen_partition].bytes_per_sector;
 
-	printk("Files in directory %d [%x]:\n", cluster_no, cluster_no);
 	int num_clusters = 0;
 	do {
 		read_cluster(cluster_no, dst);
@@ -196,9 +284,10 @@ void fat32_inspect_dir(uint32_t cluster_no) {
 		dst += bytes_per_cluster;
 	} while(cluster_no != FAT32_TERMINAL_CLUSTER_NO);
 
+	printk("Files in directory %d [%x]:\n", cluster_no, cluster_no);
 	struct dir_record *dir_rec;
 	for(dir_rec = (struct dir_record *)saved_begin;
-			dir_rec != (struct dir_record *)(FAT_end + bytes_per_cluster * num_clusters);
+			dir_rec != (struct dir_record *)((uint8_t *)FAT_end + bytes_per_cluster * num_clusters);
 			dir_rec += 1) {
 
 		if(IS_TERMINAL(*dir_rec)) { break; }
@@ -211,15 +300,22 @@ void fat32_inspect_dir(uint32_t cluster_no) {
 			uint32_t cluster_no;
 			((uint16_t *)&cluster_no)[0] = dir_rec->dir_first_cluster_low;
 			((uint16_t *)&cluster_no)[1] = dir_rec->dir_first_cluster_high;
+			if(cluster_no == 0) {
+				printk("attempting to inspect cluster no < 2, aborting.\n");
+			} else {
+				putk("clusters: ");
+				do {
+					printk("%d [%x] ", cluster_no, cluster_no);
+					cluster_no = fat32_next_cluster(cluster_no);
 
-			putk("clusters: ");
-			do {
-				printk("%d [%x]<%x> ", cluster_no, cluster_no,
-						FAT32_TERMINAL_CLUSTER_NO);
-				cluster_no = fat32_next_cluster(cluster_no);
+					if(cluster_no <= 2 && cluster_no != FAT32_TERMINAL_CLUSTER_NO) {
+						putk("PRE-ROOT ");
+					}
 
-			} while(cluster_no != FAT32_TERMINAL_CLUSTER_NO);
-			putk("\n");
+				} while(cluster_no != FAT32_TERMINAL_CLUSTER_NO && 
+								cluster_no > 2);
+				putk("\n");
+			}
 		}
 	}
 }
@@ -307,49 +403,6 @@ int fat32_init(
 
 #if 0
 
-// Returns the starting cluster of the newly allocated file. To find
-// the dir record in the root, just iterate through all dir records
-// until you find one with the correct cluster number.
-uint32_t alloc_file_in_root() {
-	if (!did_init) {
-		panic("Attempted to write to filesystem before initialization.\n");
-	}
-
-	// Find a free directory entry in the root directory, and assign a 
-	// free cluster to it.
-	uint32_t cur_cluster_no = prev_cluster_no =
-		vol_data[chosen_partition].root_dir_first_cluster;
-	
-	uint32_t records_per_cluster =
-			(vol_data[chosen_partition].sectors_per_cluster * SD_SECTOR_SIZE) 
-			/ sizeof(struct dir_record);
-
-	struct dir_record *cluster_data = (struct dir_record *)FAT_end;
-	while(cur_cluster_no != -1) {
-		read_cluster(cur_cluster_no, (uint8_t *)cluster_data);
-		
-		for(unsigned long i = 0; i < records_per_cluster; ++i) {
-			if(IS_TERMINAL(cluster_data[i])) {
-
-				// Found free space, we will insert the file here. Allocate a new
-				// cluster for the file data, and add the cluster number to this
-				// entry.
-			}
-		}
-		
-		prev_cluster_no = cur_cluster_no;
-		cur_cluster_no = fat32_next_cluster(cur_cluster_no);
-	}
-
-	// This should be extremely rare.
-	if(cur_cluster_no == -1) {
-		uint32_t allocd_cluster_no = 
-			fat32_extend_chain_by_1(prev_cluster_no);
-
-		// Allocate a new cluster for a file, and add it to the first entry
-		// in this allocated directory cluster.
-	}
-}
 	
 	uint32_t allocd_cluster_no = find_free_cluster();
 	

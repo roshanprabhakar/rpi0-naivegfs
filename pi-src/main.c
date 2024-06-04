@@ -34,7 +34,7 @@ void entry() {
 
 	fat32_inspect_dir(FAT32_ROOT_CLUSTER_NO);
 
-	putk("All SD writs done, it is safe to reset the pi.\n");
+	putk("All SD writes done, it is safe to reset the pi.\n");
 	putk("DONE!!!\n");
 	return;
 }

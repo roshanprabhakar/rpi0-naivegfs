@@ -5,7 +5,7 @@
 #define MBR_SECTOR 0
 
 #define FAT32_ROOT_CLUSTER_NO 2
-#define FAT32_TERMINAL_CLUSTER_NO (0x0ffffff)
+#define FAT32_TERMINAL_CLUSTER_NO (((uint32_t)-1)>>4)
 #define CLUSTER_NO(m) (FAT32_TERMINAL_CLUSTER_NO & (m))
 
 //int fat32_init(int (*)(unsigned, unsigned char *, unsigned));
