@@ -82,10 +82,26 @@ uint32_t alloc_local_file_at(
 	) {
 
 	for(int j = 0; j < 11; ++j) { 
-			cluster_data[i].dir_name[j] = name[j];
+		cluster_data[i].dir_name[j] = name[j];
 	}
 
+	uint32_t prev_cluster, allocd_cluster;
+	prev_cluster = allocd_cluster = find_free_local_cluster();
+	--num_clusters;
 
+	dr->dir_first_cluster_low = ((uint16_t *)&allocd_cluster)[0];
+	dr->dir_first_cluster_high = ((uint16_t *)&allocd_cluster)[1];
+
+	// No special attribute values (no sys, ro, isdir, etc.)
+	dr->dir_attr = 0;
+
+	// Alloc the rest of the file and populate the FAT.
+	while(num_clusters > 0) {
+		allocd_cluster = find_free_local_cluster();
+		FAT[CLUSTER_NO(prev_cluster)] = allocd_cluster;
+		prev_cluster = allocd_cluster;
+		--num_cluster;
+	}
 
 }
 
@@ -110,7 +126,7 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 	struct dir_record *cluster_data = (struct dir_record *)FAT_end;
 	while(cur_dir_cluster_no != -1) {
 
-		read_cluster(cur_cluster_no, (uint8_t *)cluster_data);
+		read_cluster(cur_dir_cluster_no, (uint8_t *)cluster_data);
 		
 		for(unsigned long i = 0; i < records_per_cluster; ++i) {
 			if(IS_TERMINAL(cluster_data[i])) {
@@ -119,8 +135,17 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 				// cluster for the file data, and add the cluster number to this
 				// entry.
 				alloc_local_file_at(cluster_data + i, num_clusters, name);
+			
+				// Change the terminal.
+				if(i + 1 != records_per_cluster) {
+					*((uint8_t *)&cluster_data[i + 1]) = 0;
+				}
 
 				// Write back dirty sector.
+				uint32_t dirty_lba = cluster_no_to_lba(cur_cluster_no)
+					+ (i * sizeof(struct dir_record) / SD_SECTOR_SIZE);
+				(void)writesector(cluster_data, dirty_lba, 1);
+				
 			}
 		}
 		
@@ -140,10 +165,15 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 
 		// Now, set the end of the fat to the entry, and write it to the
 		// first sector of the allocated cluster.
-		// TODO
 		alloc_local_file_at(cluster_data, num_clusters, name);
 
-		// Write back dirty sector.
+		// Set terminal at appropriate location.
+		*((uint8_t *)&cluster_data[1]) = 0;
+
+		// Write back dirty sector. The dirty sector is the first sector
+		// of this cluster.
+		uint32_t dirty_lba = cluster_no_to_lba(allocd_cluster);
+		(void)writesector(cluster_data, dirty_lba, 1);
 	}
 
 }
