@@ -82,7 +82,7 @@ uint32_t alloc_local_file_at(
 	) {
 
 	for(int j = 0; j < 11; ++j) { 
-		cluster_data[i].dir_name[j] = name[j];
+		dr->dir_name[j] = name[j];
 	}
 
 	uint32_t prev_cluster, allocd_cluster;
@@ -134,7 +134,7 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 				// Found free space, we will insert the file here. Allocate a new
 				// cluster for the file data, and add the cluster number to this
 				// entry.
-				alloc_local_file_at(cluster_data + i, num_clusters, name);
+				uint32_t file_first_cluster_no = alloc_local_file_at(cluster_data + i, num_clusters, name);
 			
 				// Change the terminal.
 				if(i + 1 != records_per_cluster) {
@@ -146,6 +146,7 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 					+ (i * sizeof(struct dir_record) / SD_SECTOR_SIZE);
 				(void)writesector(cluster_data, dirty_lba, 1);
 				
+				return file_first_cluster_no;
 			}
 		}
 		
@@ -165,7 +166,7 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 
 		// Now, set the end of the fat to the entry, and write it to the
 		// first sector of the allocated cluster.
-		alloc_local_file_at(cluster_data, num_clusters, name);
+		uint32_t file_first_cluster_no = alloc_local_file_at(cluster_data, num_clusters, name);
 
 		// Set terminal at appropriate location.
 		*((uint8_t *)&cluster_data[1]) = 0;
@@ -174,6 +175,8 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 		// of this cluster.
 		uint32_t dirty_lba = cluster_no_to_lba(allocd_cluster);
 		(void)writesector(cluster_data, dirty_lba, 1);
+
+		return file_first_cluster_no;
 	}
 
 }
