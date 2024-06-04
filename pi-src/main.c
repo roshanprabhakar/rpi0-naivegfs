@@ -33,14 +33,14 @@ void _cstart() {
 void entry() {
 
 	fat32_inspect_dir(FAT32_ROOT_CLUSTER_NO);
-	uint32_t start = fat32_alloc_local_file(3, "new file");
-	// fat32_inspect_dir(FAT32_ROOT_CLUSTER_NO);
+	uint32_t start = fat32_alloc_local_file(5, "new file");
+	printk("======================================================\n");
 	printk("Allocd file at %d\n", start);
-
-
+	printk("======================================================\n");
+	fat32_inspect_dir(FAT32_ROOT_CLUSTER_NO);
 
 	// Close the filesystem.
-	// fat32_shutdown();	
+	fat32_shutdown();	
 
 	putk("DONE!!!\n");
 	return;
