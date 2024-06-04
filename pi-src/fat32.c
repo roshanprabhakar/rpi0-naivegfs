@@ -116,8 +116,8 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 
 	// Find a free directory entry in the root directory, and assign a 
 	// free cluster to it.
-	uint32_t cur_dir_cluster_no = prev_dir_cluster_no =
-		vol_data[chosen_partition].root_dir_first_cluster;
+	uint32_t cur_dir_cluster_no = vol_data[chosen_partition].root_dir_first_cluster;
+	uint32_t prev_dir_cluster_no = cur_dir_cluster_no;
 
 	uint32_t records_per_cluster =
 			(vol_data[chosen_partition].sectors_per_cluster * SD_SECTOR_SIZE) 
@@ -142,18 +142,18 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 				}
 
 				// Write back dirty sector.
-				uint32_t dirty_lba = cluster_no_to_lba(cur_cluster_no)
+				uint32_t dirty_lba = cluster_no_to_lba(cur_dir_cluster_no)
 					+ (i * sizeof(struct dir_record) / SD_SECTOR_SIZE);
 				(void)writesector(cluster_data, dirty_lba, 1);
 				
 			}
 		}
 		
-		prev_cluster_no = cur_cluster_no;
-		cur_cluster_no = fat32_next_cluster(cur_cluster_no);
+		prev_dir_cluster_no = cur_dir_cluster_no;
+		cur_dir_cluster_no = fat32_next_cluster(cur_dir_cluster_no);
 	}
 
-	if(cur_cluster_no == -1) {
+	if(cur_dir_cluster_no == -1) {
 
 		// We have reached the end of the root directory without finding
 		// a free entry. So, allocate a new cluster for the root directory,
@@ -161,7 +161,7 @@ uint32_t alloc_local_file(uint32_t num_clusters, char const *name) {
 
 		uint32_t allocd_cluster = find_free_local_cluster();
 		FAT[allocd_cluster] = CLUSTER_NO(-1);	
-		FAT[prev_cluster_no] = CLUSTER_NO(allocd_cluster);
+		FAT[prev_dir_cluster_no] = CLUSTER_NO(allocd_cluster);
 
 		// Now, set the end of the fat to the entry, and write it to the
 		// first sector of the allocated cluster.
