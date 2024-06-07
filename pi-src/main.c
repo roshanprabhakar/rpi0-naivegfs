@@ -42,7 +42,16 @@ void entry() {
 	}	
 	printk("pi: received config init signal.\n");
 
+#if 0
 	int created_new = dfs_init_config();
+
+	printk("cfg cluster number: %d\n");
+#endif
+
+	uint32_t cfg_file_cluster_no = dfs_init_config();
+
+	printk("config file start cluster no: %d\n", cfg_file_cluster_no);
+
 
 #if 0
 	uint32_t op = 0;

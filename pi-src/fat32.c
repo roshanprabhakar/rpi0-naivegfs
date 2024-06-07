@@ -22,7 +22,7 @@ extern int kernel_end;
 static uint32_t *FAT = (uint32_t *)&kernel_end;
 static uint32_t *FAT_end;
 
-static int fat_modified = 0;
+// static int fat_modified = 0;
 
 //////////////////////////////////////////////////////////////////////////
 // 
@@ -64,6 +64,18 @@ uint32_t find_free_local_cluster() {
 uint32_t alloc_free_local_cluster() {
 	uint32_t out = find_free_local_cluster();
 	FAT[CLUSTER_NO(out)] = CLUSTER_NO(-1);
+
+	// Write the dirty fat sector back to disk.
+	uint32_t index_in_fat = CLUSTER_NO(out);
+
+	static uint32_t words_per_sector = SD_SECTOR_SIZE / sizeof(uint32_t);
+
+	uint32_t sector_in_fat = index_in_fat / words_per_sector;
+	uint32_t *buf_to_write = FAT + (sector_in_fat * words_per_sector);
+
+	writesector((unsigned char *)buf_to_write,
+			sector_in_fat + vol_data[chosen_partition].fat_begin_lba, 1);
+
 	return out;
 }
 
@@ -100,6 +112,22 @@ void follow_file_chain(uint32_t start_cluster_no) {
 	printk("%d\n", start_cluster_no);
 }
 
+// Point an entry in the fat to the next cluster, and write the dirty
+// sector back to disk.
+void fat32_point_fat(uint32_t prev, uint32_t next) {
+	FAT[prev] = next;
+
+	uint32_t index_in_fat = CLUSTER_NO(prev);
+
+	static uint32_t words_per_sector = SD_SECTOR_SIZE / sizeof(uint32_t);
+
+	uint32_t sector_in_fat = index_in_fat / words_per_sector;
+	uint32_t *buf_to_write = FAT + (words_per_sector * sector_in_fat);
+
+	writesector((unsigned char *)buf_to_write, 
+			sector_in_fat + vol_data[chosen_partition].fat_begin_lba, 1);
+}
+
 uint32_t alloc_local_file_at(
 		struct dir_record *dr, int num_clusters, char const *name
 	) {
@@ -119,33 +147,44 @@ uint32_t alloc_local_file_at(
 	dr->dir_attr = 0;
 
 	// Alloc the rest of the file and populate the FAT.
-	printk("Creating file @ clusters: %u ", allocd_cluster);
-	do {
+#if DEBUG
+	printk("Creating file @ clusters: %d ", allocd_cluster);
+#endif
+	while(num_clusters > 0) {
 		allocd_cluster = alloc_free_local_cluster();
-		printk("%u ", allocd_cluster);
-		FAT[CLUSTER_NO(prev_cluster)] = allocd_cluster;
+		fat32_point_fat(CLUSTER_NO(prev_cluster), CLUSTER_NO(allocd_cluster));
+
+#if DEBUG
+		printk("%d ", allocd_cluster);
+#endif
+		
 		prev_cluster = allocd_cluster;
 		--num_clusters;
-	} while(num_clusters > 0);
+	}
+#if DEBUG
 	printk("\n");
+#endif
 
-	FAT[CLUSTER_NO(allocd_cluster)] = -1;	
-	fat_modified = 1;
 	return out;
 }
 
-int fat32_dump_dir_rec(struct dir_record *);
+void fat32_dump_dir_rec(struct dir_record *);
+
 uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 	if(!did_init) {
 		panic("Attempted to write to fat32 before init.\n");
 	} 
 
+#if DEBUG
 	printk("======================================\n");
 	printk("== PERFORMING A LOCAL ALLOC ON ROOT ==\n");
 	printk("======================================\n");
+#endif
 
+#if DEBUG
 	printk("Sectors per cluster: %d\n", 
 			all_vol_ids[chosen_partition].sectors_per_cluster);
+#endif
 
 	// We will find a free directory entry in the root directory. Then, we
 	// will allocate and make a cluster chain of size num_clusters in the
@@ -161,6 +200,7 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 
 	while(cur_dir_cluster_no != -1) {
 
+#if DEBUG
 		printk("Reading directory cluster number: %d.\n",
 				cur_dir_cluster_no);
 
@@ -170,27 +210,33 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 		printk("First sector not part of this cluster: %d.\n",
 				cluster_no_to_lba(cur_dir_cluster_no) + 
 				all_vol_ids[chosen_partition].sectors_per_cluster);
+#endif
 
 		for(int sector_no = 0;
 				sector_no < all_vol_ids[chosen_partition].sectors_per_cluster;
 				++sector_no) {
 
+#if DEBUG
 			printk("within cluster, reading sector %d.\n", 
 					cluster_no_to_lba(cur_dir_cluster_no) + sector_no);
+#endif
 
 			readsector(cluster_no_to_lba(cur_dir_cluster_no) + sector_no,
 					(unsigned char *)records, 1);
 
 			for(int i = 0; i < records_per_sector; ++i) {
 
+#if DEBUG
 				if(!IS_LFN(records[i].dir_attr)) {
 					printk("dir entry %d:\n", i);
 					printk("idx: %d\n", i);
 					fat32_dump_dir_rec(&records[i]);
 				}
+#endif
 				
-				if(IS_TERMINAL(records[i])) {
+				if(!IS_LFN(records[i].dir_attr) && IS_TERMINAL(records[i])) {
 					
+#if DEBUG
 					printk("Handling the terminal now.\n");
 
 					printk("Here are the contents of the sector to be written back, before the terminal is modified.\n");
@@ -198,15 +244,22 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 						fat32_dump_dir_rec(&records[j]);
 						if(IS_TERMINAL(records[j])) { break; }
 					}
+#endif
 
 					uint32_t file_first_cluster_no = 
 						alloc_local_file_at(&records[i], num_clusters, name);
 
+#if DEBUG
 					printk("Now updating the terminal entry.\n");
+
+					printk("records_per_sector: %d, i: %d\n", records_per_sector, i);
+#endif
 
 					if(i == records_per_sector - 1) {
 						
+#if DEBUG
 						printk("The inserted entry lives at a sector boundary, we now update the next sector of the cluster.\n");
+#endif
 
 						// We are at a sector boundary
 						if(sector_no == 
@@ -217,12 +270,14 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 							// and a terminal has not been found, we will allocate a 
 							// new cluster only then.
 
+#if DEBUG
 							printk("The entry lives at a cluster boundary, no need to write the next sector.\n");
 							
 							printk("writing to sector: %d", 
 									cluster_no_to_lba(cur_dir_cluster_no) + sector_no); 
-							// writesector((unsigned char *)records,
-							//		cluster_no_to_lba(cur_dir_cluster_no) + sector_no, 1);
+#endif
+							writesector((unsigned char *)records,
+								cluster_no_to_lba(cur_dir_cluster_no) + sector_no, 1);
 
 							return file_first_cluster_no;
 
@@ -233,18 +288,20 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 							// back to the next sector, after writing back the current
 							// sector.
 
+#if DEBUG
 							printk("We are not at a cluster boundary, we need to write the terminal to the next sector.\n");
 							printk("Writing displayed contents to %d.\n",
 									cluster_no_to_lba(cur_dir_cluster_no) + sector_no);
 							printk("Writing terminal sector to %d.\n",
 									cluster_no_to_lba(cur_dir_cluster_no) + sector_no + 1);
+#endif
 
-							// writesector((unsigned char *)records,
-							//		cluster_no_to_lba(cur_dir_cluster_no) + sector_no, 1);
+							writesector((unsigned char *)records,
+								cluster_no_to_lba(cur_dir_cluster_no) + sector_no, 1);
 
 							((uint8_t *)&records[0])[0] = 0;
-							// writesector((unsigned char *)records,
-							//		cluster_no_to_lba(cur_dir_cluster_no) + sector_no + 1, 1);
+							writesector((unsigned char *)records,
+								cluster_no_to_lba(cur_dir_cluster_no) + sector_no + 1, 1);
 
 							return file_first_cluster_no;
 						}
@@ -253,14 +310,16 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 						// Modify next entry to contain the terminal, and write the
 						// dirty sector back to disk.
 
+#if DEBUG
 						printk("The inserted dir entry is not at a sector boundary.\n");
-						pritnk("Here is the sector to write back, after modifying the terminal:\n");
+						printk("Here is the sector to write back, after modifying the terminal:\n");
+#endif
 
 						((uint8_t *)&records[i + 1])[0] = 0;
-						// writesector((unsigned char *)records, 
-						//		cluster_no_to_lba(cur_dir_cluster_no) + sector_no, 1);
-
+						writesector((unsigned char *)records, 
+							cluster_no_to_lba(cur_dir_cluster_no) + sector_no, 1);
 						
+#if DEBUG
 						for(int j = 0; j < records_per_sector; ++j) {
 							fat32_dump_dir_rec(&records[j]);
 							if(IS_TERMINAL(records[j])) { break; }
@@ -268,7 +327,7 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 
 						printk("Writing to sector %d.\n",
 								cluster_no_to_lba(cur_dir_cluster_no) + sector_no);
-
+#endif
 						return file_first_cluster_no;
 					}
 				}
@@ -282,7 +341,9 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 
 	if(cur_dir_cluster_no == CLUSTER_NO(-1)) {
 
+#if DEBUG
 		printk("We have reached the end of the directory cluster chain, allocing a new cluster.\n");
+#endif
 
 		// We have reached the end of the root directory without finding
 		// a free entry. So, allocate a new cluster for the root directory,
@@ -290,11 +351,11 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 		// marks the allocd cluster as terminal in the fat.
 
 		uint32_t allocd_cluster = alloc_free_local_cluster();
-		FAT[CLUSTER_NO(prev_dir_cluster_no)] = CLUSTER_NO(allocd_cluster);
+		fat32_point_fat(CLUSTER_NO(prev_dir_cluster_no), CLUSTER_NO(allocd_cluster));
 
+#if DEBUG
 		printk("Newly allocd sector no: %d.\n", allocd_cluster);
-
-		// TODO write dirty FAT sector back to disk.
+#endif
 		
 		// Now, set the first sector of the newly allocated cluster to
 		// an empty sector with just the allocated file entry, as well as 
@@ -302,18 +363,22 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 		// allocated cluster.
 
 		uint32_t file_first_cluster_no = 
-			alloc_local_file_at(&records[0], num_clusters, filename);
+			alloc_local_file_at(&records[0], num_clusters, name);
 
-		*((uint8_t *)&records[1])[0] = 0;
+		((uint8_t *)(&records[1]))[0] = 0;
 
+#if DEBUG
 		printk("Allocd file:\n");
 		fat32_dump_dir_rec(&records[0]);
+#endif
 
+#if DEBUG
 		printk("Writing to sector %d.\n",
 				cluster_no_to_lba(CLUSTER_NO(allocd_cluster)));
+#endif
 
-		// writesector((unsigned char *)records,
-		//		cluster_no_to_lba(CLUSTER_NO(allocd_cluster)), 1);
+		writesector((unsigned char *)records,
+			cluster_no_to_lba(CLUSTER_NO(allocd_cluster)), 1);
 
 		return file_first_cluster_no;
 	}
@@ -321,6 +386,7 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 	return -1;
 }
 
+#if 0
 // Allocates a file of size num_clusters on the local disk, and returns
 // the starting cluster number. The file is always thrown into the
 // root directory of the local system.
@@ -500,6 +566,7 @@ uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
 
 	return -1;
 }
+#endif
 
 #if 0
 // Returns the starting cluster of the newly allocated file. To find
@@ -518,6 +585,38 @@ uint32_t alloc_file_in_root() {
 	}
 }
 #endif
+
+void dump_root_content() {
+	if(!did_init) {
+		panic("Attempted to dump the filesystem before fat32 init.\n");
+	}
+
+	uint32_t cluster_no = FAT32_ROOT_CLUSTER_NO;
+
+	uint32_t records_per_sector = SD_SECTOR_SIZE / sizeof(struct dir_record);
+	struct dir_record records[records_per_sector];
+
+	while(cluster_no != -1) {
+
+		for(int sector_no = 0; 
+				sector_no < all_vol_ids[chosen_partition].sectors_per_cluster;
+				++sector_no) {
+
+			readsector(cluster_no_to_lba(cluster_no) + sector_no,
+					(unsigned char *)records, 1);
+
+			for(int i = 0; i < records_per_sector; ++i) {
+				if(!IS_LFN(records[i].dir_attr)) {
+					fat32_dump_dir_rec(&records[i]);
+				}
+
+				if(IS_TERMINAL(records[i])) { return; }
+			}
+		}
+
+		cluster_no = fat32_next_cluster(cluster_no);
+	}
+}
 
 uint32_t fat32_get_cluster_no(char const *filename) {
 	if(!did_init) {
@@ -539,25 +638,25 @@ uint32_t fat32_get_cluster_no(char const *filename) {
 					(unsigned char *)records, 1);
 
 			for(int i = 0; i < records_per_sector; ++i) {
-				if(IS_TERMINAL(records[i])) { return -1; }
-
 				if(!IS_LFN(records[i].dir_attr)) {
+					if(IS_TERMINAL(records[i])) { return -1; }
 
 					if(strncmp(records[i].dir_name, filename, 11) == 0) {
 
 						uint32_t file_start_cluster_no;
 
 						((uint16_t *)&file_start_cluster_no)[0] = 
-							records[rec_idx].dir_first_cluster_low;
+							records[i].dir_first_cluster_low;
 
 						((uint16_t *)&file_start_cluster_no)[1] = 
-							records[rec_idx].dir_first_cluster_high;
+							records[i].dir_first_cluster_high;
 
 						return file_start_cluster_no;
 					}
 				}
 			}
 		}
+		cluster_no = fat32_next_cluster(cluster_no);
 	}
 
 	return -1;
@@ -886,6 +985,7 @@ int fat32_init(
 	return 0;
 }
 
+#if 0
 void fat32_shutdown() {
 	struct sector {
 		uint32_t data[SD_SECTOR_SIZE];
@@ -906,6 +1006,7 @@ void fat32_shutdown() {
 		printk("Done writing FAT to disk, it is safe to reset the pi.\n");
 	}
 }
+#endif
 
 #if 0
 
