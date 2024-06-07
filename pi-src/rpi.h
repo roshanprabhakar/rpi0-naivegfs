@@ -31,11 +31,12 @@ void BRANCHTO(void (*fn)(void));
 void uart_init(void);
 void uart_disable(void);
 int uart_get8(void);
-int uart_put8(uint8_t c);
-int uart_hex(unsigned h);
+int uart_put8(uint8_t);
+void uart_put32(uint32_t);
 int uart_get8_async(void);
 int uart_can_put8(void);
 int uart_can_putc(void);
+int uart_can_getc(void);
 void uart_flush_tx(void);
 
 /* Output routines. */

@@ -1,0 +1,68 @@
+GLOBAL ROOT DIR FILE:
+
+Accessing the global filesystem requires the following:
+	Access to the global root directory file
+	A bit indicating whether all 16 ids have been allocated
+	A counter indicating the first unallocated disk id
+
+The global root directory file may live anywhere (perhaps the accessing
+	client machine's own disk).
+
+
+SHARED DISK CONFIG FILE:
+
+A shared disk can be a part of:
+	0 global filesystems (no dfs-cfg-cs244b found in root)
+	n global filesystems (a single dfs-cfg-cs244b found in root)
+
+The contents of the config file are as follows:
+	For each global filesystem this disk is a part of:
+		An 11-byte identifying name, a 4 bit ID specifying the disk ID in
+		this filesystem.
+
+
+
+DFS BOOT PROTOCOL:
+
+mac:
+	1. read the specified dfs root dir.
+	2. identify the range of expected ids.
+
+for each connected pi:
+	mac->pi create empty config file (idempotent, does not overwrite existing).
+
+	mac->pi here is the fs identifier
+	mac->pi <fs identifying name>
+	mac->pi do you have an id for this filesystem?
+	pi->mac yes|no = resp1
+	if(resp1 == yes) {
+		
+		great. indicate this pi is connected, boot done.
+
+	} else if(resp2 == no) {
+
+		mac->mac can we add a new disk to the fs? = resp2
+		if(resp2 == yes) {
+
+			mac->pi here is your identifier for this fs
+			mac->pi <disk id>
+			mac->mac update fs state to reflect new disk.
+
+			indicate this pi is connected, boot done.
+
+		} else if(resp2 == no) {
+
+			mac->pi kill yourself (hang)
+
+		} else {
+
+			unreached
+		}
+		
+	} else {
+
+		corrupt pi kernel
+	}
+
+
+

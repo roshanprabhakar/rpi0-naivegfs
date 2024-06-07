@@ -36,6 +36,15 @@ uint32_t get32(int fd) {
 		;
 }
 
+int dfs_boot(pi *p) {
+	
+	put32(p->fd,CONFIG_INIT);
+
+
+
+	return 0;
+}
+
 int boot(pi *p, void *program, int nbytes) {
 	printf("Booting pi id<%d> %s..\n", p->fd, p->name);
 
@@ -85,6 +94,7 @@ int boot(pi *p, void *program, int nbytes) {
 			panic("Did not receive a BOOT_SUCCESS from pi<%d>, aborting boot.\n", p->fd);
 			return -1;
 		}
+		++i;
 	}
 
 	printf("pi<%d> successfully booted!\n", p->fd);
@@ -92,3 +102,5 @@ int boot(pi *p, void *program, int nbytes) {
 
 	return 0;
 }
+
+

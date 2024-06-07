@@ -134,6 +134,193 @@ uint32_t alloc_local_file_at(
 	return out;
 }
 
+int fat32_dump_dir_rec(struct dir_record *);
+uint32_t fat32_alloc_local_file(uint32_t num_clusters, char const *name) {
+	if(!did_init) {
+		panic("Attempted to write to fat32 before init.\n");
+	} 
+
+	printk("======================================\n");
+	printk("== PERFORMING A LOCAL ALLOC ON ROOT ==\n");
+	printk("======================================\n");
+
+	printk("Sectors per cluster: %d\n", 
+			all_vol_ids[chosen_partition].sectors_per_cluster);
+
+	// We will find a free directory entry in the root directory. Then, we
+	// will allocate and make a cluster chain of size num_clusters in the
+	// fat, and point the directory entry to the head of the chain.
+	uint32_t cur_dir_cluster_no, prev_dir_cluster_no; 
+	
+	cur_dir_cluster_no = prev_dir_cluster_no = 
+		vol_data[chosen_partition].root_dir_first_cluster;
+
+	uint32_t records_per_sector = SD_SECTOR_SIZE / sizeof(struct dir_record);
+
+	struct dir_record records[records_per_sector];
+
+	while(cur_dir_cluster_no != -1) {
+
+		printk("Reading directory cluster number: %d.\n",
+				cur_dir_cluster_no);
+
+		printk("Cluster start lba: %d.\n", 
+				cluster_no_to_lba(cur_dir_cluster_no));
+
+		printk("First sector not part of this cluster: %d.\n",
+				cluster_no_to_lba(cur_dir_cluster_no) + 
+				all_vol_ids[chosen_partition].sectors_per_cluster);
+
+		for(int sector_no = 0;
+				sector_no < all_vol_ids[chosen_partition].sectors_per_cluster;
+				++sector_no) {
+
+			printk("within cluster, reading sector %d.\n", 
+					cluster_no_to_lba(cur_dir_cluster_no) + sector_no);
+
+			readsector(cluster_no_to_lba(cur_dir_cluster_no) + sector_no,
+					(unsigned char *)records, 1);
+
+			for(int i = 0; i < records_per_sector; ++i) {
+
+				if(!IS_LFN(records[i].dir_attr)) {
+					printk("dir entry %d:\n", i);
+					printk("idx: %d\n", i);
+					fat32_dump_dir_rec(&records[i]);
+				}
+				
+				if(IS_TERMINAL(records[i])) {
+					
+					printk("Handling the terminal now.\n");
+
+					printk("Here are the contents of the sector to be written back, before the terminal is modified.\n");
+					for(int j = 0; j < records_per_sector; ++j) {
+						fat32_dump_dir_rec(&records[j]);
+						if(IS_TERMINAL(records[j])) { break; }
+					}
+
+					uint32_t file_first_cluster_no = 
+						alloc_local_file_at(&records[i], num_clusters, name);
+
+					printk("Now updating the terminal entry.\n");
+
+					if(i == records_per_sector - 1) {
+						
+						printk("The inserted entry lives at a sector boundary, we now update the next sector of the cluster.\n");
+
+						// We are at a sector boundary
+						if(sector_no == 
+								all_vol_ids[chosen_partition].sectors_per_cluster - 1) {
+
+							// We are at a cluster boundary. No need to allocate a new
+							// cluster to store the terminal. If we exit the while,
+							// and a terminal has not been found, we will allocate a 
+							// new cluster only then.
+
+							printk("The entry lives at a cluster boundary, no need to write the next sector.\n");
+							
+							printk("writing to sector: %d", 
+									cluster_no_to_lba(cur_dir_cluster_no) + sector_no); 
+							// writesector((unsigned char *)records,
+							//		cluster_no_to_lba(cur_dir_cluster_no) + sector_no, 1);
+
+							return file_first_cluster_no;
+
+						} else {
+
+							// The next sector is guaranteed to have useless information,
+							// just write back char[sd_sector_size] = {0, rand*511} 
+							// back to the next sector, after writing back the current
+							// sector.
+
+							printk("We are not at a cluster boundary, we need to write the terminal to the next sector.\n");
+							printk("Writing displayed contents to %d.\n",
+									cluster_no_to_lba(cur_dir_cluster_no) + sector_no);
+							printk("Writing terminal sector to %d.\n",
+									cluster_no_to_lba(cur_dir_cluster_no) + sector_no + 1);
+
+							// writesector((unsigned char *)records,
+							//		cluster_no_to_lba(cur_dir_cluster_no) + sector_no, 1);
+
+							((uint8_t *)&records[0])[0] = 0;
+							// writesector((unsigned char *)records,
+							//		cluster_no_to_lba(cur_dir_cluster_no) + sector_no + 1, 1);
+
+							return file_first_cluster_no;
+						}
+					} else {
+
+						// Modify next entry to contain the terminal, and write the
+						// dirty sector back to disk.
+
+						printk("The inserted dir entry is not at a sector boundary.\n");
+						pritnk("Here is the sector to write back, after modifying the terminal:\n");
+
+						((uint8_t *)&records[i + 1])[0] = 0;
+						// writesector((unsigned char *)records, 
+						//		cluster_no_to_lba(cur_dir_cluster_no) + sector_no, 1);
+
+						
+						for(int j = 0; j < records_per_sector; ++j) {
+							fat32_dump_dir_rec(&records[j]);
+							if(IS_TERMINAL(records[j])) { break; }
+						}
+
+						printk("Writing to sector %d.\n",
+								cluster_no_to_lba(cur_dir_cluster_no) + sector_no);
+
+						return file_first_cluster_no;
+					}
+				}
+				
+			}
+		}
+
+		prev_dir_cluster_no = cur_dir_cluster_no;
+		cur_dir_cluster_no = fat32_next_cluster(cur_dir_cluster_no);
+	}
+
+	if(cur_dir_cluster_no == CLUSTER_NO(-1)) {
+
+		printk("We have reached the end of the directory cluster chain, allocing a new cluster.\n");
+
+		// We have reached the end of the root directory without finding
+		// a free entry. So, allocate a new cluster for the root directory,
+		// and add it to the root directory's cluster chain. alloc_cluster
+		// marks the allocd cluster as terminal in the fat.
+
+		uint32_t allocd_cluster = alloc_free_local_cluster();
+		FAT[CLUSTER_NO(prev_dir_cluster_no)] = CLUSTER_NO(allocd_cluster);
+
+		printk("Newly allocd sector no: %d.\n", allocd_cluster);
+
+		// TODO write dirty FAT sector back to disk.
+		
+		// Now, set the first sector of the newly allocated cluster to
+		// an empty sector with just the allocated file entry, as well as 
+		// a terminal, then write this sector to the first sector of the
+		// allocated cluster.
+
+		uint32_t file_first_cluster_no = 
+			alloc_local_file_at(&records[0], num_clusters, filename);
+
+		*((uint8_t *)&records[1])[0] = 0;
+
+		printk("Allocd file:\n");
+		fat32_dump_dir_rec(&records[0]);
+
+		printk("Writing to sector %d.\n",
+				cluster_no_to_lba(CLUSTER_NO(allocd_cluster)));
+
+		// writesector((unsigned char *)records,
+		//		cluster_no_to_lba(CLUSTER_NO(allocd_cluster)), 1);
+
+		return file_first_cluster_no;
+	}
+
+	return -1;
+}
+
 // Allocates a file of size num_clusters on the local disk, and returns
 // the starting cluster number. The file is always thrown into the
 // root directory of the local system.
@@ -332,15 +519,58 @@ uint32_t alloc_file_in_root() {
 }
 #endif
 
+uint32_t fat32_get_cluster_no(char const *filename) {
+	if(!did_init) {
+		panic("Attempted to search the filesystem before fat32 init.\n");
+	}
+
+	uint32_t cluster_no = FAT32_ROOT_CLUSTER_NO;
+
+	uint32_t records_per_sector = SD_SECTOR_SIZE / sizeof(struct dir_record);
+	struct dir_record records[records_per_sector];
+
+	while(cluster_no != -1) {
+
+		for(int sector_no = 0; 
+				sector_no < all_vol_ids[chosen_partition].sectors_per_cluster;
+				++sector_no) {
+
+			readsector(cluster_no_to_lba(cluster_no) + sector_no,
+					(unsigned char *)records, 1);
+
+			for(int i = 0; i < records_per_sector; ++i) {
+				if(IS_TERMINAL(records[i])) { return -1; }
+
+				if(!IS_LFN(records[i].dir_attr)) {
+
+					if(strncmp(records[i].dir_name, filename, 11) == 0) {
+
+						uint32_t file_start_cluster_no;
+
+						((uint16_t *)&file_start_cluster_no)[0] = 
+							records[rec_idx].dir_first_cluster_low;
+
+						((uint16_t *)&file_start_cluster_no)[1] = 
+							records[rec_idx].dir_first_cluster_high;
+
+						return file_start_cluster_no;
+					}
+				}
+			}
+		}
+	}
+
+	return -1;
+}
+
+#if 0
 uint32_t fat32_find_cluster_no(char const *name, uint32_t dir_cluster_no) {
 	if(!did_init) {
 		panic("Attempted to perform an FS query before initialization.\n");
 	}
 
-	struct __attribute__((packed)) {
-		uint32_t data[SD_SECTOR_SIZE];
-		uint8_t terminal_field;
-	} dst;
+	uint32_t records_per_sector = SD_SECTOR_SIZE / sizeof(struct dir_record);
+	struct dir_record records[records_per_sector];
 	
 	while(dir_cluster_no != -1) {
 
@@ -349,25 +579,28 @@ uint32_t fat32_find_cluster_no(char const *name, uint32_t dir_cluster_no) {
 				++sector_no) {
 
 			readsector(cluster_no_to_lba(dir_cluster_no) + sector_no, 
-								 (unsigned char *)&dst, 1);
+								 (unsigned char *)records, 1);
 
-
-			struct dir_record *d;
-			for(d = (struct dir_record *)&dst; 
-					d != (struct dir_record *)(&dst.terminal_field);
-					++d) {
-
-				if(IS_TERMINAL(*d)) {
+			for(int rec_idx = 0; rec_idx < records_per_sector; ++rec_idx) {
+				if(IS_TERMINAL(records[rec_idx])) {
 					return -1;
-				} else {
-					if(strncmp(d->dir_name, name, 11) == 0) {
+				} else if(!IS_LFN(records[rec_idx].dir_attr)) {
+
+
+					if(strncmp(records[rec_idx].dir_name, name, 11) == 0) {
 						uint32_t cluster_no;
-						((uint16_t *)&cluster_no)[0] = d->dir_first_cluster_low;
-						((uint16_t *)&cluster_no)[1] = d->dir_first_cluster_high;
+
+						((uint16_t *)&cluster_no)[0] = 
+							records[rec_idx].dir_first_cluster_low;
+
+						((uint16_t *)&cluster_no)[1] = 
+							records[rec_idx].dir_first_cluster_high;
+
 						return cluster_no;
 					}
+				
 				}
-			}
+			}			
 		}
 
 		dir_cluster_no = fat32_next_cluster(dir_cluster_no);
@@ -375,6 +608,7 @@ uint32_t fat32_find_cluster_no(char const *name, uint32_t dir_cluster_no) {
 
 	return -1;
 }
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 //
@@ -437,6 +671,42 @@ void fat32_dump_vol_id(struct volume_id *vol_id) {
 	printk("+-----------------------\n");
 }
 
+void fat32_dump_dir_rec(struct dir_record *d) {
+	if(((uint8_t *)d)[0] == 0) {
+		printk("+--------+\n");
+		printk("|TERMINAL|\n");
+		printk("+--------+\n");
+	} else {
+		printk("+-----\n");
+		printk("|name: ");
+		for(int i = 0; i < sizeof(d->dir_name); ++i) {
+			printk("%c", d->dir_name[i]);
+		}
+		printk("\n");
+		printk("|attr: %x\n", d->dir_attr);
+		uint32_t cluster_no;
+		((uint16_t *)&cluster_no)[0] = d->dir_first_cluster_low;
+		((uint16_t *)&cluster_no)[1] = d->dir_first_cluster_high;
+
+		printk("|file size: %d\n", d->dir_file_size);
+		printk("|ordered cluster list: ");
+		while(1) {
+			if(cluster_no == FAT32_TERMINAL_CLUSTER_NO) {
+				printk("TERM\n");
+				break;
+			} else if(cluster_no <= 2) {
+				putk("PRE-ROOT\n");
+				break;
+			} else {
+				printk("%d [%x] ", cluster_no, cluster_no);
+			}
+			cluster_no = fat32_next_cluster(cluster_no);
+		}
+		printk("+--\n");
+	}
+}
+
+#if 0
 int fat32_dump_dir_recs(dir_sector *ds) {
 	struct dir_record *d;
 	for(int i = 0; i < sizeof(dir_sector)/sizeof(struct dir_record); ++i) {
@@ -459,6 +729,7 @@ int fat32_dump_dir_recs(dir_sector *ds) {
 	}
 	return 0;
 }
+#endif
 
 void print_dir_ent_attr(struct dir_record *d) {
 	printk("ro<%d> hidden<%d> sys<%d> volid<%d> dir<%d>\n",
