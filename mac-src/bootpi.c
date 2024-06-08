@@ -41,23 +41,20 @@ uint32_t get32(int fd) {
 }
 
 void send_string(pi *p, char *to_send, int n) {
-
 	uint32_t op;
 	for(int i = 0; i < n; ++i) {
 		put32(p->fd, ((uint32_t *)to_send)[i]);
 
 		while((op = get32(p->fd)) != DUMMY)
 			;
-		// printf("Saw dummy\n");
 	}
 }
 
-int dfs_boot(pi *p, char *dfs_name, int words_in_name) {
+int dfs_boot(
+		pi *p, char *dfs_name, int words_in_name, uint32_t *assignable_id
+	) {
 
 	uint32_t op = 0;
-
-	// Send init signal, instructing the pi to identify the dfs config file.
-	put32(p->fd,CONFIG_INIT);
 
 	// Indicate that the next n <= 30 chars will be the dfs name.
 	put32(p->fd,FS_ID_START);
@@ -69,8 +66,72 @@ int dfs_boot(pi *p, char *dfs_name, int words_in_name) {
 	// Send the name of the dfs to locate.
 	send_string(p, dfs_name, words_in_name);
 
+	// Send init signal, instructing the pi to identify the dfs config file
+	// and initialize its fat32 system.
+	put32(p->fd,CONFIG_INIT);
+
+	struct timeval wait_timeout = {
+		.tv_sec = 20,
+		.tv_usec = 0
+	};
+
+	fd_set wait;
+	FD_ZERO(&wait);
+	FD_SET(p->fd,&wait);
+
+	printf("Waiting for pi<%d> to set up its fat32 subsystem.\n", p->fd);
+	int num_ready = select(p->fd + 1, &wait, NULL, NULL, &wait_timeout);
+
+	if(num_ready == 0) {
+		printf("pi<%d> did not set up its fat32 in time, moving on.\n", p->fd);
+		return -1;
+	}
+
+	// Now that data is available, wait to see the dummy indicating
+	// completion.
+
+	while((op = get32(p->fd)) != DUMMY)
+		;
+	printf("Pi has set up its fat.\n");
+
+	// Now, ask the pi for its id. It can do this since it has already
+	// received the dfs name.
+	
+	put32(p->fd, REQUEST_ID);
+
+	while((op = get32(p->fd)) != DUMMY)
+		;
+
+	put32(p->fd, (0xffffff00 | *assignable_id));
+
+	// Now, as implemented, if the assignable number is -1, then the 
+	// pi will hang. If this is the case, we want to return. Otherwise,
+	// wait for a assign accepted, in which case we increment the 
+	// assignable id, or a assign rejected, in which case we do nothing.
+	
+	do {
+		op = get32(p->fd);
+		if(op == DUMMY || op == DUMMY2) { break; }
+	} while(1);
+
+
+	if(op == DUMMY2) {
+		printf("pi<%d> took id %d.\n", p->fd, *assignable_id);
+		(*assignable_id)++;
+	}
+
+	op = get32(p->fd);
+	printf("pi<%d> claims to have id %d.\n", p->fd, op & 0xff);
+
 	return 0;
 }
+
+
+
+
+
+
+
 
 int boot(pi *p, void *program, int nbytes) {
 	printf("Booting pi id<%d> %s..\n", p->fd, p->name);

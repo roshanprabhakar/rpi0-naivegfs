@@ -85,5 +85,6 @@ void fat32_inspect_dir(uint32_t cluster_no);
 uint32_t fat32_alloc_local_file(uint32_t, char const *);
 uint32_t fat32_get_cluster_no(char const *);
 void dump_root_content(void);
+uint32_t cluster_no_to_lba(uint32_t);
 
 #endif // _FAT32_H_

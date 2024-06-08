@@ -16,6 +16,6 @@ void put32(int, uint32_t);
 uint32_t get32(int);
 
 int boot(pi *, void *, int);
-int dfs_boot(pi *, char *, int);
+int dfs_boot(pi *, char *, int, uint32_t *);
 
 #endif // _BOOT_PI_

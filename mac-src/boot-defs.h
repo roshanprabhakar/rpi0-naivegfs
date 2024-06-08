@@ -24,10 +24,12 @@ enum {
 
 	PRINT_STRING    = 0xDDDDEEEE,       // pi sends to print a string.
 
+	DUMMY						= 0x12345678,
+	DUMMY2					= 0x9abcdeff,
+
 	CONFIG_INIT			= 0x0000EEEE,
 	FS_ID_START			= 0x0000FFFF,
-
-	DUMMY						= 0x12345678,
+	REQUEST_ID 			= 0xCCCCDDDD,
 
 #if 0
     // if you want to be fancy, you could uncomment this and return

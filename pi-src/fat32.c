@@ -76,6 +76,14 @@ uint32_t alloc_free_local_cluster() {
 	writesector((unsigned char *)buf_to_write,
 			sector_in_fat + vol_data[chosen_partition].fat_begin_lba, 1);
 
+	// Write all zeros to the first sector of the allocd file.
+	static struct __attribute__((packed)) {
+		uint8_t buf[512];
+	} blank_sector = {0};
+
+	writesector((unsigned char *)&blank_sector, 
+			cluster_no_to_lba(CLUSTER_NO(out)), 1);
+
 	return out;
 }
 
@@ -938,11 +946,11 @@ int fat32_init(
 				panic("Partition uses different sector size than sd driver.\n");
 			}
 
-			printk("+-----------------------\n");
-			printk("|Fat32 parition [ %d ]\n", i);
-			printk("|start lba: %d\n", boot_sector.partitions[i].lba_begin);
-			printk("|num sectors: %d\n", boot_sector.partitions[i].num_sectors);
-			fat32_dump_vol_id(&all_vol_ids[i]);
+			// printk("+-----------------------\n");
+			// printk("|Fat32 parition [ %d ]\n", i);
+			// printk("|start lba: %d\n", boot_sector.partitions[i].lba_begin);
+			// printk("|num sectors: %d\n", boot_sector.partitions[i].num_sectors);
+			// fat32_dump_vol_id(&all_vol_ids[i]);
 
 			// Init fat per-volume relevant data.
 			vol_data[i].fat_begin_lba = 
@@ -968,7 +976,7 @@ int fat32_init(
 		uint32_t data[SD_SECTOR_SIZE];
 	};
 
-	printk("Reading the FAT into main memory...\n");
+	// printk("Reading the FAT into main memory...\n");
 	int i = 0;
 	for(; i < v->sectors_per_fat; ++i) {
 		struct sector *fat_s = (struct sector *)FAT + i;
@@ -979,7 +987,7 @@ int fat32_init(
 	}
 	FAT_end = (uint32_t *)((uint8_t *)FAT + 
 			(v->bytes_per_sector * v->sectors_per_fat));
-	printk("Done reading %d FAT sectors into memory.\n", i);
+	// printk("Done reading %d FAT sectors into memory.\n", i);
 
 	did_init = 1;
 	return 0;
