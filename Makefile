@@ -38,7 +38,7 @@ pi_support_obj := $(shell find . -wholename "./ext-bin/*.o")
 all: init pibin macbin
 
 run: 
-	make && ./build/mac/deploy ./build/pi/pi-side.bin partition-01.dfs
+	make && ./build/mac/deploy ./build/pi/pi-side.bin partition-02.dfs
 
 ######################### MAC SIDE #########################
 

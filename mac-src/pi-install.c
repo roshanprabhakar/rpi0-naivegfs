@@ -133,7 +133,7 @@ end:
 // Returns the next id that may be allocated, or -1 if none.
 int init_dfs(char const *name, struct dfs_file *df) {
 
-	int fd = open(name, O_RDWR);
+	int fd = open(name, O_RDWR | O_CREAT);
 
 	struct stat s;
 	if(fstat(fd, &s) == -1) {
