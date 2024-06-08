@@ -13,7 +13,6 @@ _start:
 
 	mov sp, #STACK_ADDR		@ initialize stack pointer.
 	mov fp, #0						@ clear frame pointer reg. don't think needed.
-	@ bl notmain
 	
 	bl _cstart 						@ call our code to do initialization.
 	b _halt								@ if they return, just hang.

@@ -24,7 +24,10 @@ enum {
 
 	PRINT_STRING    = 0xDDDDEEEE,       // pi sends to print a string.
 
+	DUMMY						= 0x12345678,
+
 	CONFIG_INIT			= 0x0000EEEE,
+	FS_ID_START			= 0x0000FFFF,
 
 #if 0
     // if you want to be fancy, you could uncomment this and return

@@ -5,6 +5,7 @@
 #include "boot-crc32.h"
 
 #include <unistd.h>
+#include <time.h>
 
 void put8(int fd, uint8_t v) {
 	int n = write(fd, &v, sizeof(v));
@@ -26,6 +27,9 @@ void put32(int fd, uint32_t v) {
 	if(n != sizeof(v)) {
 		panic("put32: Expected a write of %ld bytes, actual write was %d\n", sizeof(v), n);
 	}
+	struct timespec req = {0};
+	req.tv_nsec = 50000000L;
+	nanosleep(&req, (struct timespec *)NULL);
 }
 
 uint32_t get32(int fd) {
@@ -36,11 +40,34 @@ uint32_t get32(int fd) {
 		;
 }
 
-int dfs_boot(pi *p) {
-	
+void send_string(pi *p, char *to_send, int n) {
+
+	uint32_t op;
+	for(int i = 0; i < n; ++i) {
+		put32(p->fd, ((uint32_t *)to_send)[i]);
+
+		while((op = get32(p->fd)) != DUMMY)
+			;
+		// printf("Saw dummy\n");
+	}
+}
+
+int dfs_boot(pi *p, char *dfs_name, int words_in_name) {
+
+	uint32_t op = 0;
+
+	// Send init signal, instructing the pi to identify the dfs config file.
 	put32(p->fd,CONFIG_INIT);
 
+	// Indicate that the next n <= 30 chars will be the dfs name.
+	put32(p->fd,FS_ID_START);
 
+	// Wait for dummy.
+	while((op = get32(p->fd)) != DUMMY)
+		;
+
+	// Send the name of the dfs to locate.
+	send_string(p, dfs_name, words_in_name);
 
 	return 0;
 }

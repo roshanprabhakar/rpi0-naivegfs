@@ -86,7 +86,11 @@ int boot_connected_pies(char const *pi_prog_path) {
 
 		// Now that the pi has been booted successfully, perform the 
 		// dfs init.
-		if(dfs_boot(&pies[init_i]) != 0) {
+
+		// char dfs_name[] = "example dfs"; // TODO TODO
+		char dfs_name[] = "example_dfs_1.00\xff\xff\xff\xff";
+
+		if(dfs_boot(&pies[init_i], dfs_name, sizeof(dfs_name)/4) != 0) {
 			printf("dfs boot on pi<%d> failed, aborting all.\n", pies[init_i].fd);
 			boot_failed = 1;
 			goto end;
